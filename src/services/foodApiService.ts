@@ -1,13 +1,18 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Use localhost for iOS Simulator, 10.0.2.2 for Android Emulator
-// For physical devices, you need your machine's LAN IP
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
+// --- RENDER DEPLOYMENT URL ---
+// デプロイ後、Renderから発行されたURLをここに貼り付けてください
+const RENDER_URL = 'https://fitness-app-backend-xxxx.onrender.com/api';
+
+// Use Render URL if configured, otherwise fallback to local dev URLs
+const API_URL = RENDER_URL.includes('xxxx')
+    ? (Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api')
+    : RENDER_URL;
 
 const api = axios.create({
     baseURL: API_URL,
-    timeout: 10000,
+    timeout: 15000, // Increased timeout for cold starts on Render Free Plan
 });
 
 export const scanFood = async (barcode: string) => {
