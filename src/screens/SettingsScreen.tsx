@@ -1,0 +1,288 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { useLanguageContext } from '../context/LanguageContext';
+
+// Using a custom Picker component or basic buttons to avoid extra dependency if possible, 
+// but @react-native-picker/picker is standard in Expo. I should have installed it. 
+// I'll check my installation list. I didn't install it. 
+// I'll use a simple dropdown approach with buttons or TextInput for now to avoid specific picker dependency issues unless I install it.
+// Wait, I can install it quickly. It's better UX.
+// I'll use standard Buttons for gender and activity level for simplicity and better UI than a native picker often.
+
+const SettingsScreen = ({ navigation }: any) => {
+    const { language, setLanguage, t } = useLanguageContext();
+    const { logout } = useAuth();
+    const [weight, setWeight] = useState('');
+    const [height, setHeight] = useState('');
+    const [age, setAge] = useState('');
+    const [targetWeight, setTargetWeight] = useState('');
+    const [gender, setGender] = useState<'male' | 'female'>('male');
+    const [activityLevel, setActivityLevel] = useState('1.2');
+    const [goal, setGoal] = useState<number | null>(null);
+
+    // Update navigation title based on language
+    useEffect(() => {
+        navigation.setOptions({ title: t('settings') });
+    }, [navigation, language, t]);
+
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        try {
+            const savedSettings = await AsyncStorage.getItem('userSettings');
+            if (savedSettings) {
+                const parsed = JSON.parse(savedSettings);
+                setWeight(parsed.weight || '');
+                setHeight(parsed.height || '');
+                setAge(parsed.age || '');
+                setTargetWeight(parsed.targetWeight || '');
+                setGender(parsed.gender || 'male');
+                setActivityLevel(parsed.activityLevel || '1.2');
+                setGoal(parsed.goal || null);
+            }
+        } catch (e) {
+            console.error('Failed to load settings', e);
+        }
+    };
+
+    const calculateGoal = () => {
+        const w = parseFloat(weight);
+        const h = parseFloat(height);
+        const a = parseFloat(age);
+        const act = parseFloat(activityLevel);
+
+        if (isNaN(w) || isNaN(h) || isNaN(a)) {
+            Alert.alert(t('error'), t('invalidInput'));
+            return;
+        }
+
+        let bmr = 0;
+        if (gender === 'male') {
+            bmr = 88.362 + (13.397 * w) + (4.799 * h) - (5.677 * a);
+        } else {
+            bmr = 447.593 + (9.247 * w) + (3.098 * h) - (4.330 * a);
+        }
+
+        const calculatedGoal = Math.round(bmr * act);
+        setGoal(calculatedGoal);
+        saveSettings(calculatedGoal, { weight, height, age, gender, activityLevel, targetWeight });
+        return calculatedGoal;
+    };
+
+    const saveSettings = async (calculatedGoal: number, settings: any) => {
+        try {
+            // Save current settings
+            await AsyncStorage.setItem('userSettings', JSON.stringify({ ...settings, goal: calculatedGoal }));
+
+            // Save Weight History
+            if (settings.weight) {
+                const today = new Date().toISOString().split('T')[0];
+                const weightHistoryJson = await AsyncStorage.getItem('weight_history');
+                let weightHistory = weightHistoryJson ? JSON.parse(weightHistoryJson) : [];
+
+                // Remove existing entry for today if any, to prevent duplicates for same day
+                weightHistory = weightHistory.filter((item: any) => item.date !== today);
+
+                // Add new entry
+                weightHistory.push({ date: today, weight: parseFloat(settings.weight) });
+
+                // Sort by date just in case
+                weightHistory.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                await AsyncStorage.setItem('weight_history', JSON.stringify(weightHistory));
+            }
+
+            Alert.alert(t('success'), t('goalUpdated', { goal: calculatedGoal }));
+        } catch {
+            Alert.alert(t('error'), t('saveFailed'));
+        }
+    };
+
+    const resetData = async () => {
+        Alert.alert(
+            t('resetData'),
+            t('resetConfirm'),
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Reset",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await AsyncStorage.clear();
+                            Alert.alert(t('success'), t('resetComplete'));
+                            // Optional: Restart app or navigate to initial state
+                            // For now, reloading settings which will be empty
+                            setWeight('');
+                            setHeight('');
+                            setAge('');
+                            setTargetWeight('');
+                            setGoal(null);
+                        } catch {
+                            Alert.alert(t('error'), "Failed to reset data");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    return (
+        <ScrollView contentContainerStyle={styles.container}>
+            <Text style={styles.title}>{t('userSettings')}</Text>
+
+            <Text style={styles.label}>{t('language')}</Text>
+            <View style={styles.row}>
+                <Button
+                    title={language === 'en' ? `${t('english')} (Selected)` : t('english')}
+                    onPress={() => setLanguage('en')}
+                    color={language === 'en' ? '#007AFF' : '#ccc'}
+                />
+                <Button
+                    title={language === 'ja' ? `${t('japanese')} (Selected)` : t('japanese')}
+                    onPress={() => setLanguage('ja')}
+                    color={language === 'ja' ? '#FF2D55' : '#ccc'}
+                />
+            </View>
+
+            <Text style={styles.label}>{t('weight')}</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="e.g. 70"
+            />
+
+            <Text style={styles.label}>{t('targetWeight')}</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={targetWeight}
+                onChangeText={setTargetWeight}
+                placeholder="e.g. 60"
+            />
+
+            <Text style={styles.label}>{t('height')}</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={height}
+                onChangeText={setHeight}
+                placeholder="e.g. 175"
+            />
+
+            <Text style={styles.label}>{t('age')}</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={age}
+                onChangeText={setAge}
+                placeholder="e.g. 30"
+            />
+
+            <Text style={styles.label}>{t('gender')}</Text>
+            <View style={styles.row}>
+                <Button title={gender === 'male' ? `${t('male')} (Selected)` : t('male')} onPress={() => setGender('male')} color={gender === 'male' ? '#007AFF' : '#ccc'} />
+                <Button title={gender === 'female' ? `${t('female')} (Selected)` : t('female')} onPress={() => setGender('female')} color={gender === 'female' ? '#FF2D55' : '#ccc'} />
+            </View>
+
+            <Text style={styles.label}>{t('activityLevel')}</Text>
+            <View style={styles.activityContainer}>
+                {[
+                    { label: t('sedentary'), value: '1.2' },
+                    { label: t('light'), value: '1.375' },
+                    { label: t('moderate'), value: '1.55' },
+                    { label: t('active'), value: '1.725' },
+                    { label: t('veryActive'), value: '1.9' },
+                ].map((level) => (
+                    <View key={level.value} style={styles.activityButton}>
+                        <Button
+                            title={level.label}
+                            onPress={() => setActivityLevel(level.value)}
+                            color={activityLevel === level.value ? '#34C759' : '#ccc'}
+                        />
+                    </View>
+                ))}
+            </View>
+
+            <View style={styles.separator} />
+
+            <Button title={t('saveGoal')} onPress={calculateGoal} />
+
+            {goal && (
+                <View style={styles.resultContainer}>
+                    <Text style={styles.resultText}>{t('dailyGoal', { goal })}</Text>
+                </View>
+            )}
+
+            <View style={styles.separator} />
+            <Button title={t('resetData')} onPress={resetData} color="red" />
+            <View style={styles.separator} />
+            <Button title="Logout" onPress={() => logout()} color="#ff0000" />
+            <View style={styles.separator} />
+        </ScrollView>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: {
+        padding: 20,
+        backgroundColor: '#fff',
+        flexGrow: 1,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    label: {
+        fontSize: 16,
+        marginBottom: 5,
+        marginTop: 10,
+        fontWeight: '600',
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 10,
+        fontSize: 16,
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 10,
+    },
+    activityContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    activityButton: {
+        width: '48%',
+        marginBottom: 5,
+    },
+    separator: {
+        height: 20,
+    },
+    resultContainer: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    resultText: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#007AFF',
+    },
+});
+
+export default SettingsScreen;

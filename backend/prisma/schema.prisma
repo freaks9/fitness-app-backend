@@ -1,0 +1,33 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model FoodProduct {
+  barcode         String   @id
+  name            String
+  calories        Float    // kcal per 100g
+  protein         Float    // g per 100g
+  fat             Float    // g per 100g
+  carbs           Float    // g per 100g
+  source          String   // 'openfoodfacts' | 'manual'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  mealLogs        MealLog[]
+}
+
+model MealLog {
+  id              Int          @id @default(autoincrement())
+  userId          String       // From Supabase Auth
+  foodId          String
+  quantity        Float        // grams
+  mealType        String       // breakfast, lunch, dinner, snack
+  date            DateTime     @default(now())
+  
+  foodProduct     FoodProduct  @relation(fields: [foodId], references: [barcode])
+}

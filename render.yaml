@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: fitness-backend
+    env: docker
+    dockerContext: backend
+    dockerfilePath: backend/Dockerfile
+    plan: free # or starter
+    region: singapore # or your preferred region
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORT
+        value: 3000
+    healthCheckPath: /health
