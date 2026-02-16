@@ -31,3 +31,4 @@ model MealLog {
   
   foodProduct     FoodProduct  @relation(fields: [foodId], references: [barcode])
 }
+
