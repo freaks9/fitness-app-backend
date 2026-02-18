@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const FloatingIcon = ({ text, color, delay }: { text: string; color: string; delay: number }) => {
     return (

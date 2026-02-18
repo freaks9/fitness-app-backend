@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
 import { prisma } from './db';
+import aiRoutes from './routes/ai';
+import foodRoutes from './routes/food';
+import logRoutes from './routes/logs';
 
 dotenv.config();
 
@@ -8,9 +11,6 @@ const fastify = Fastify({ logger: true });
 // const prisma = new PrismaClient();
 
 // Register Routes
-import aiRoutes from './routes/ai';
-import foodRoutes from './routes/food';
-import logRoutes from './routes/logs';
 
 fastify.register(foodRoutes, { prefix: '/api/food' });
 fastify.register(logRoutes, { prefix: '/api/logs' });

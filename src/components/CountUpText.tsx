@@ -46,7 +46,7 @@ export const CountUpText: React.FC<CountUpTextProps> = ({
         return () => {
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         };
-    }, [value, duration]);
+    }, [value, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return <Text style={style}>{formatter(displayValue)}</Text>;
 };
