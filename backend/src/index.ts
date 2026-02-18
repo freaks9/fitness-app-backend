@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
 import { prisma } from './db';
@@ -8,6 +9,11 @@ import logRoutes from './routes/logs';
 dotenv.config();
 
 const fastify = Fastify({ logger: true });
+
+// CORS
+fastify.register(cors, {
+    origin: true // Allow all origins for development/Expo
+});
 // const prisma = new PrismaClient();
 
 // Register Routes

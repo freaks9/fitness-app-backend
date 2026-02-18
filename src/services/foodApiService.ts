@@ -12,7 +12,7 @@ const API_URL = RENDER_URL.includes('xxxx')
 
 const api = axios.create({
     baseURL: API_URL,
-    timeout: 15000, // Increased timeout for cold starts on Render Free Plan
+    timeout: 30000, // Further increased for slow Render cold starts
 });
 
 export const scanFood = async (barcode: string) => {

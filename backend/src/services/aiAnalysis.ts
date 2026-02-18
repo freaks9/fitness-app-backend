@@ -72,6 +72,10 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
         const response = await result.response;
         const text = response.text();
 
+        console.log("--- Raw Gemini Response ---");
+        console.log(text);
+        console.log("---------------------------");
+
         // Improved Robust JSON extraction
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {

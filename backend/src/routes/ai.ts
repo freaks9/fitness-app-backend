@@ -4,6 +4,7 @@ import { analyzeLabelImage, analyzeMealImage } from '../services/aiAnalysis';
 export default async function aiRoutes(fastify: FastifyInstance) {
     fastify.post('/analyze-meal', async (request, reply) => {
         const { image } = request.body as { image: string };
+        fastify.log.info('--- Received /analyze-meal request ---');
 
         if (!image) {
             return reply.code(400).send({ error: 'Image data is required' });
