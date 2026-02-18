@@ -59,7 +59,7 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
 
         const imagePart = {
             inlineData: {
@@ -118,7 +118,7 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
 
         const imagePart = {
             inlineData: {
