@@ -80,15 +80,15 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             console.error("No JSON found in response:", text);
-            return null;
+            throw new Error(`AI Response did not contain valid JSON. Raw response: ${text.substring(0, 50)}...`);
         }
 
         const analysis: MealAnalysisResult = JSON.parse(jsonMatch[0]);
         return analysis;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Analysis Error:", error);
-        return null;
+        throw new Error(`Gemini API Error: ${error.message || error}`);
     }
 };
 const LABEL_SYSTEM_PROMPT = `
@@ -134,14 +134,14 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             console.error("No JSON found in label response:", text);
-            return null;
+            throw new Error(`AI Label Response did not contain valid JSON. Raw response: ${text.substring(0, 50)}...`);
         }
 
         const analysis = JSON.parse(jsonMatch[0]);
         return analysis;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Label Analysis Error:", error);
-        return null;
+        throw new Error(`Gemini Label API Error: ${error.message || error}`);
     }
 };

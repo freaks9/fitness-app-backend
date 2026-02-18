@@ -57,9 +57,11 @@ export const useMealAnalysis = () => {
             const analysis = await analyzeMeal(processedBase64);
             setResult(analysis);
             return analysis;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            Alert.alert(t('error'), 'Failed to analyze meal.');
+            // DEBUG: Show full error object
+            const debugInfo = error.response?.data ? JSON.stringify(error.response.data) : (error.message || 'Unknown Error');
+            Alert.alert(t('error'), `Debug: ${debugInfo}`);
             return null;
         } finally {
             setLoading(false);

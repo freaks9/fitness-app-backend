@@ -68,8 +68,8 @@ export const analyzeMeal = async (base64Image: string) => {
             image: base64Image
         });
         return response.data.analysis;
-    } catch (error) {
-        console.error('Analyze Meal Error:', error);
+    } catch (error: any) {
+        console.error('Analyze Meal Error:', error.response?.data || error.message);
         throw error;
     }
 };
