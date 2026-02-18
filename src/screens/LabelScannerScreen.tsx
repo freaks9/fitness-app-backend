@@ -33,12 +33,13 @@ const LabelScannerScreen = ({ navigation }: any) => {
             setIsScanning(true);
             try {
                 const photo = await cameraRef.current.takePictureAsync({
-                    base64: true,
+                    base64: false, // No need for base64
                     quality: 0.8,
                 });
 
-                if (photo.base64) {
-                    const analysis = await analyzeLabelImage(photo.base64);
+                if (photo.uri) {
+                    // Pass URI to analyzeLabelImage
+                    const analysis = await analyzeLabelImage(photo.uri);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     if (analysis) {
                         navigation.navigate('MealEntry', {

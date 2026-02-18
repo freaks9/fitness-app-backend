@@ -145,13 +145,16 @@ const ScannerScreen = ({ navigation, route }: any) => {
         if (cameraRef.current) {
             try {
                 const photo = await cameraRef.current.takePictureAsync({
-                    base64: true,
+                    base64: false, // No need for base64 from camera anymore
                     quality: 0.8,
                 });
 
-                if (photo && photo.base64) {
-                    const analysis = await analyzeImage(photo.base64);
+                if (photo && photo.uri) {
+                    // Pass URI to analyzeImage, which now handles resizing and base64 conversion
+                    const analysis = await analyzeImage(photo.uri);
+
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
                     if (analysis) {
                         navigation.navigate('MealEntry', {
                             prefilledName: analysis.food_name,
