@@ -20,8 +20,8 @@ export default async function aiRoutes(fastify: FastifyInstance) {
                 return reply.code(500).send({ error: 'Failed to analyze meal image' });
             }
         } catch (error) {
-            fastify.log.error(error);
-            return reply.code(500).send({ error: 'Internal Server Error' });
+            fastify.log.error('AI Meal Analysis Route Error:', error);
+            return reply.code(500).send({ error: 'Internal Server Error', message: (error as any).message });
         }
     });
 
@@ -37,10 +37,14 @@ export default async function aiRoutes(fastify: FastifyInstance) {
             const base64Image = image.replace(/^data:image\/\w+;base64,/, "");
             const analysis = await analyzeLabelImage(base64Image);
 
-        }
+            if (analysis) {
+                return { analysis };
+            } else {
+                return reply.code(500).send({ error: 'Failed to analyze label image' });
+            }
         } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ error: 'Internal Server Error' });
-    }
-});
+            fastify.log.error('AI Label Analysis Route Error:', error);
+            return reply.code(500).send({ error: 'Internal Server Error', message: (error as any).message });
+        }
+    });
 }
