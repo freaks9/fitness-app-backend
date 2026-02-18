@@ -27,6 +27,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
     fastify.post('/analyze-label', async (request, reply) => {
         const { image } = request.body as { image: string };
+        fastify.log.info('--- Received /analyze-label request ---');
 
         if (!image) {
             return reply.code(400).send({ error: 'Image data is required' });
@@ -36,14 +37,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
             const base64Image = image.replace(/^data:image\/\w+;base64,/, "");
             const analysis = await analyzeLabelImage(base64Image);
 
-            if (analysis) {
-                return { analysis };
-            } else {
-                return reply.code(500).send({ error: 'Failed to analyze label image' });
-            }
-        } catch (error) {
-            fastify.log.error(error);
-            return reply.code(500).send({ error: 'Internal Server Error' });
         }
-    });
+        } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ error: 'Internal Server Error' });
+    }
+});
 }

@@ -8,7 +8,10 @@ import logRoutes from './routes/logs';
 
 dotenv.config();
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({
+    logger: true,
+    bodyLimit: 10485760 // 10MB
+});
 
 // CORS
 fastify.register(cors, {
