@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 // --- RENDER DEPLOYMENT URL ---
 // デプロイ後、Renderから発行されたURLをここに貼り付けてください
-const RENDER_URL = 'https://fitness-app-backend-xxxx.onrender.com/api';
+const RENDER_URL = 'https://fitness-backend-xqha.onrender.com/api';
 
 // Use Render URL if configured, otherwise fallback to local dev URLs
 const API_URL = RENDER_URL.includes('xxxx')

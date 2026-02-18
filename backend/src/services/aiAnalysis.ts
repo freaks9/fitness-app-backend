@@ -26,13 +26,14 @@ export interface MealAnalysisResult {
 
 const SYSTEM_PROMPT = `
 あなたはプロの管理栄養士です。
-与えられた画像から食事の内容を分析し、以下の仕様で回答してください。
+与えられた画像から食事の内容を非常に精密に分析し、以下の仕様で回答してください。
 
-1. 食事の名称を特定する。
-2. 目安となる分量を推定し、カロリー(kcal)、タンパク質(g)、脂質(g)、炭水化物(g)を算出する。
-3. 確信度が低い場合は、平均的な外食の数値を採用する。
+1. **食品・料理の特定**: 画像内の個々の食材や料理名を正確に特定してください。
+2. **分量の推定**: 皿のサイズや食材の形状から、摂取重量(g)を推測してください。日本食（ご飯一膳、味噌汁一杯など）の一般的なポーションを参考にしてください。
+3. **栄養計算**: 特定した料理と分量に基づき、カロリー(kcal)、タンパク質(g)、脂質(g)、炭水化物(g)を算出してください。
+4. **詳細な説明**: ユーザーが納得できるよう、どのように分量を推測し、どの食材から栄養価を算出したかを簡潔に説明してください。
 
-出力フォーマット (JSONのみ):
+出力フォーマット (必ずJSON単体で出力):
 {
   "food_name": "名称",
   "estimated_weight_g": 300,
@@ -41,7 +42,7 @@ const SYSTEM_PROMPT = `
   "fat": 15.0,
   "carbs": 55.0,
   "analysis_confidence": 0.85,
-  "description": "鶏胸肉と野菜の炒め物と思われます。油控えめの調理と推測しました。"
+  "description": "説明文"
 }
 `;
 
@@ -51,10 +52,8 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
     }
 
     try {
-        // Use Gemini 1.5 Flash for speed and cost efficiency
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        // Prepare image part
         const imagePart = {
             inlineData: {
                 data: base64Image,
@@ -62,16 +61,18 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
             },
         };
 
-        // Generate content
         const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
         const response = await result.response;
         const text = response.text();
 
-        // Parse JSON from the response text
-        // Clean up markdown code blocks if present
-        const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        // Improved Robust JSON extraction
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error("No JSON found in response:", text);
+            return null;
+        }
 
-        const analysis: MealAnalysisResult = JSON.parse(jsonString);
+        const analysis: MealAnalysisResult = JSON.parse(jsonMatch[0]);
         return analysis;
 
     } catch (error) {
@@ -119,8 +120,13 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
         const response = await result.response;
         const text = response.text();
 
-        const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const analysis = JSON.parse(jsonString);
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error("No JSON found in label response:", text);
+            return null;
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
         return analysis;
 
     } catch (error) {

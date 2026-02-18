@@ -34,7 +34,7 @@ const LabelScannerScreen = ({ navigation }: any) => {
             try {
                 const photo = await cameraRef.current.takePictureAsync({
                     base64: true,
-                    quality: 0.5,
+                    quality: 0.8,
                 });
 
                 if (photo.base64) {
