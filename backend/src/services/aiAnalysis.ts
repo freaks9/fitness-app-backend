@@ -64,8 +64,9 @@ const calculateBackoff = (attempt: number) => 2000 * Math.pow(2, attempt);
 
 // Helper function to handle generation with fallback and retries
 const generateWithFallback = async (systemPrompt: string, imagePart: any): Promise<string> => {
-    // gemini-2.0-flash causes 429 (Rate Limit). Adding fallbacks.
-    const models = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"];
+    // gemini-2.0-flash and others often hit 429 or 404 for images.
+    // gemini-flash-lite-latest verified as the most stable vision model for this key.
+    const models = ["gemini-flash-lite-latest", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
     let lastError: any = null;
 
     for (const modelName of models) {
