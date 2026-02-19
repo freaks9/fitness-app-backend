@@ -64,9 +64,8 @@ const calculateBackoff = (attempt: number) => 2000 * Math.pow(2, attempt);
 
 // Helper function to handle generation with fallback and retries
 const generateWithFallback = async (systemPrompt: string, imagePart: any): Promise<string> => {
-    // gemini-2.0-flash-lite caused 400 Invalid Key error in simulation.
-    // Sticking to gemini-2.0-flash which causes 429 (Rate Limit) but is valid.
-    const models = ["gemini-2.0-flash"];
+    // gemini-2.0-flash causes 429 (Rate Limit). Adding fallbacks.
+    const models = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"];
     let lastError: any = null;
 
     for (const modelName of models) {
