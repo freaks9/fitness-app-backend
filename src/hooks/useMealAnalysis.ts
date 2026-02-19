@@ -48,8 +48,8 @@ export const useMealAnalysis = () => {
             if (!isBase64) {
                 const manipResult = await manipulateAsync(
                     imageUri,
-                    [{ resize: { width: 1024 } }],
-                    { compress: 0.7, format: SaveFormat.JPEG, base64: true }
+                    [{ resize: { width: 800 } }],
+                    { compress: 0.5, format: SaveFormat.JPEG, base64: true }
                 );
                 processedBase64 = manipResult.base64 || '';
             }
@@ -59,9 +59,8 @@ export const useMealAnalysis = () => {
             return analysis;
         } catch (error: any) {
             console.error(error);
-            // DEBUG: Show full error object
-            const debugInfo = error.response?.data ? JSON.stringify(error.response.data) : (error.message || 'Unknown Error');
-            Alert.alert(t('error'), `Debug: ${debugInfo}`);
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || t('failedToAnalyze');
+            Alert.alert(t('error'), errorMessage);
             return null;
         } finally {
             setLoading(false);

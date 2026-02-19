@@ -37,6 +37,11 @@ const DashboardScreen = ({ navigation }: any) => {
     const [adviceModalVisible, setAdviceModalVisible] = useState(false);
     const [adviceList, setAdviceList] = useState<string[]>([]);
 
+    // Day Completion State
+    const [dayCompleted, setDayCompleted] = useState(false);
+    const [completionModalVisible, setCompletionModalVisible] = useState(false);
+
+
     // Set up navigation header with Settings and Scanner buttons
     useEffect(() => {
         navigation.setOptions({
@@ -153,6 +158,11 @@ const DashboardScreen = ({ navigation }: any) => {
             if (weightHistoryJson) {
                 setWeightHistory(JSON.parse(weightHistoryJson));
             }
+
+            // Load Day Completion Status
+            const completedStatus = await AsyncStorage.getItem(`day_complete_${dateStr}`);
+            setDayCompleted(completedStatus === 'true');
+
         } catch (e) {
             console.error('Failed to load dashboard data', e);
         }
@@ -277,7 +287,19 @@ const DashboardScreen = ({ navigation }: any) => {
 
         Alert.alert(
             t('prediction'),
-            `${t('predictionMessage', { weeks: 5, weight: projectedWeight.toFixed(1) })} `
+            `${t('predictionMessage', { weeks: 5, weight: projectedWeight.toFixed(1) })} `,
+            [
+                {
+                    text: "OK",
+                    onPress: async () => {
+                        // Mark day as complete
+                        setDayCompleted(true);
+                        setCompletionModalVisible(true);
+                        const dateStr = selectedDate.toISOString().split('T')[0];
+                        await AsyncStorage.setItem(`day_complete_${dateStr}`, 'true');
+                    }
+                }
+            ]
         );
     };
 
@@ -335,13 +357,16 @@ const DashboardScreen = ({ navigation }: any) => {
     const insets = useSafeAreaInsets();
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
-            <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.container}>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Header: Date & Circular Progress */}
-                <View style={styles.headerContainer}>
+                <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
                     <View style={styles.dateRow}>
                         <TouchableOpacity onPress={() => changeDate(-1)}><Text style={styles.dateArrow}>{'<'}</Text></TouchableOpacity>
-                        <Text style={styles.dateText}>{selectedDate.toISOString().split('T')[0]}</Text>
+                        <Text style={styles.dateText}>
+                            {selectedDate.toISOString().split('T')[0]}
+                            {dayCompleted && " 🏆"}
+                        </Text>
                         <TouchableOpacity onPress={() => changeDate(1)}><Text style={styles.dateArrow}>{'>'}</Text></TouchableOpacity>
                     </View>
 
@@ -529,6 +554,34 @@ const DashboardScreen = ({ navigation }: any) => {
                         </TouchableOpacity>
                     </View>
                 </Modal>
+
+                {/* Day Completion Modal */}
+                <Modal
+                    animationType="fade"
+                    transparent={true}
+                    visible={completionModalVisible}
+                    onRequestClose={() => setCompletionModalVisible(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.completionModalView}>
+                            <Text style={{ fontSize: 60 }}>🏆</Text>
+                            <Text style={styles.completionTitle}>{t('dayComplete') || "Day Complete!"}</Text>
+                            <Text style={styles.completionText}>{t('greatJob') || "Great job sticking to your goals!"}</Text>
+
+                            <View style={styles.completionStats}>
+                                <Text style={styles.statText}>Calories: {eaten} / {goal}</Text>
+                                <Text style={styles.statText}>Protein: {eatenPfc.protein}g</Text>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.completionButton}
+                                onPress={() => setCompletionModalVisible(false)}
+                            >
+                                <Text style={styles.completionButtonText}>{t('close')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </ScrollView>
         </View>
     );
@@ -536,9 +589,13 @@ const DashboardScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#f5f5f5',
+        flex: 1,
+        backgroundColor: '#fff', // Outer background white to match header
+    },
+    scrollContent: {
+        backgroundColor: '#f5f5f5', // Content background gray
         paddingBottom: 40,
-        flexGrow: 1,
+        minHeight: '100%',
     },
     headerContainer: {
         backgroundColor: '#fff',
@@ -551,6 +608,7 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 5,
         alignItems: 'center',
+        marginBottom: 20, // Add spacing below header
     },
     dateRow: {
         flexDirection: 'row',
@@ -798,6 +856,58 @@ const styles = StyleSheet.create({
     adviceText: {
         fontSize: 16,
         lineHeight: 24,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    completionModalView: {
+        margin: 20,
+        backgroundColor: "white",
+        borderRadius: 20,
+        padding: 35,
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+        width: '80%',
+    },
+    completionTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginTop: 20,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    completionText: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    completionStats: {
+        marginBottom: 20,
+        alignItems: 'center',
+    },
+    statText: {
+        fontSize: 16,
+        marginVertical: 2,
+    },
+    completionButton: {
+        backgroundColor: '#007AFF',
+        borderRadius: 20,
+        padding: 10,
+        elevation: 2,
+        paddingHorizontal: 30,
+    },
+    completionButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        textAlign: 'center',
     },
     closeButton: {
         backgroundColor: "#2196F3",

@@ -4,6 +4,8 @@ import { Platform } from 'react-native';
 // --- RENDER DEPLOYMENT URL ---
 // デプロイ後、Renderから発行されたURLをここに貼り付けてください
 const RENDER_URL = 'https://fitness-backend-xqha.onrender.com/api';
+// Force local dev for now
+// const RENDER_URL = 'http://192.168.2.103:3000/api';
 
 // Use Render URL if configured, otherwise fallback to local dev URLs
 const API_URL = RENDER_URL.includes('xxxx')
@@ -12,7 +14,9 @@ const API_URL = RENDER_URL.includes('xxxx')
 
 const api = axios.create({
     baseURL: API_URL,
-    timeout: 30000, // Further increased for slow Render cold starts
+    // Render free tier cold starts can take up to 6
+    // 0s, so setting to 90s to be safe
+    timeout: 90000,
 });
 
 export const scanFood = async (barcode: string) => {
@@ -82,6 +86,23 @@ export const analyzeLabel = async (base64Image: string) => {
         return response.data.analysis;
     } catch (error) {
         console.error('Analyze Label Error:', error);
+        throw error;
+    }
+};
+
+export const createProduct = async (productData: {
+    barcode?: string;
+    name: string;
+    calories: number;
+    protein: number;
+    fat: number;
+    carbs: number;
+}) => {
+    try {
+        const response = await api.post('/food/create', productData);
+        return response.data;
+    } catch (error) {
+        console.error('Create Product Error:', error);
         throw error;
     }
 };

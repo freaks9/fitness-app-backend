@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import React, { useRef, useState } from 'react';
@@ -7,6 +9,7 @@ import { useLanguageContext } from '../context/LanguageContext';
 import { useMealAnalysis } from '../hooks/useMealAnalysis';
 
 const LabelScannerScreen = ({ navigation }: any) => {
+    const isFocused = useIsFocused();
     const { t } = useLanguageContext();
     const [permission, requestPermission] = useCameraPermissions();
     const cameraRef = useRef<any>(null);
@@ -48,7 +51,8 @@ const LabelScannerScreen = ({ navigation }: any) => {
                             prefilledProtein: analysis.protein || '',
                             prefilledFat: analysis.fat || '',
                             prefilledCarbs: analysis.carbs || '',
-                            imageUri: photo.uri
+                            imageUri: photo.uri,
+                            scannedBarcode: (navigation.getState().routes.find((r: any) => r.name === 'LabelScanner')?.params as any)?.scannedBarcode
                         });
                     }
                 }
@@ -63,7 +67,7 @@ const LabelScannerScreen = ({ navigation }: any) => {
 
     return (
         <View style={styles.container}>
-            <CameraView style={styles.camera} ref={cameraRef}>
+            {isFocused && <CameraView style={styles.camera} ref={cameraRef}>
                 <View style={styles.overlay}>
                     <View style={styles.guideFrame} />
                     <Text style={styles.guideText}>{t('scanLabel')}</Text>
@@ -74,9 +78,13 @@ const LabelScannerScreen = ({ navigation }: any) => {
                         <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
                             <View style={styles.captureButtonInner} />
                         </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+                            <Ionicons name="close-circle" size={50} color="white" />
+                        </TouchableOpacity>
                     </View>
                 )}
-            </CameraView>
+            </CameraView>}
             <AILoadingScreen visible={loading || isScanning} />
         </View>
     );
@@ -115,8 +123,10 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         position: 'absolute',
-        bottom: 40,
+        bottom: 50,
         alignSelf: 'center',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     captureButton: {
         width: 80,
@@ -126,6 +136,7 @@ const styles = StyleSheet.create({
         borderColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 30, // Space between capture and close button
     },
     captureButtonInner: {
         width: 60,
@@ -143,6 +154,9 @@ const styles = StyleSheet.create({
     permissionButtonText: {
         color: '#fff',
         fontWeight: 'bold',
+    },
+    closeButton: {
+        marginBottom: 20,
     },
 });
 

@@ -88,6 +88,9 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
 
     } catch (error: any) {
         console.error("Gemini Analysis Error:", error);
+        if (error.response) {
+            console.error("Gemini API Error Response:", JSON.stringify(error.response, null, 2));
+        }
         throw new Error(`Gemini API Error: ${error.message || error}`);
     }
 };

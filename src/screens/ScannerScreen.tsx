@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import {
     Alert,
@@ -19,6 +21,7 @@ import { useMealAnalysis } from '../hooks/useMealAnalysis';
 import { logMeal, scanFood } from '../services/foodApiService';
 
 const ScannerScreen = ({ navigation, route }: any) => {
+    const isFocused = useIsFocused();
     const { t } = useLanguageContext();
     const { user } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
@@ -27,12 +30,11 @@ const ScannerScreen = ({ navigation, route }: any) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [scannedProduct, setScannedProduct] = useState<any | null>(null);
     const [facing] = useState<CameraType>('back');
-    const [mode, setMode] = useState<'barcode' | 'ai'>('barcode');
+    const { date, mealType, mode: initialMode } = route.params || {};
+    const [mode, setMode] = useState<'barcode' | 'ai'>(initialMode === 'ai' ? 'ai' : 'barcode');
 
     const cameraRef = useRef<CameraView>(null);
     const { analyzeImage, loading: aiLoading } = useMealAnalysis();
-
-    const { date, mealType } = route.params || {};
 
     if (!permission) {
         return <View />;
@@ -84,17 +86,40 @@ const ScannerScreen = ({ navigation, route }: any) => {
                         ]
                     );
                 } else {
-                    setScannedProduct(result.product);
-                    setModalVisible(true);
+                    // Auto-navigate to MealEntry screen
+                    setScanned(false); // Reset scanned state so we can scan again later if needed
+                    navigation.navigate('MealEntry', {
+                        prefilledName: p.name,
+                        prefilledCalories: p.calories,
+                        prefilledProtein: p.protein,
+                        prefilledFat: p.fat,
+                        prefilledCarbs: p.carbs,
+                        date,
+                        mealType,
+                        scannedBarcode: data // Pass barcode to allow saving/updating
+                    });
                 }
             } else {
                 throw new Error("Product not found");
             }
         } catch {
             Alert.alert(
-                t('error'),
-                "Product not found.",
-                [{ text: 'OK', onPress: () => setScanned(false) }]
+                t('productNotFound') || "Product Not Found",
+                t('scanLabelPrompt') || "Would you like to scan the nutrition label to add this product to the database?",
+                [
+                    { text: t('cancel'), onPress: () => setScanned(false), style: 'cancel' },
+                    {
+                        text: t('scanLabel') || "Scan Label",
+                        onPress: () => {
+                            setScanned(false);
+                            navigation.navigate('LabelScanner', {
+                                date,
+                                mealType,
+                                scannedBarcode: data // Pass the barcode to link with the new product
+                            });
+                        }
+                    }
+                ]
             );
         }
         setLoading(false);
@@ -141,6 +166,43 @@ const ScannerScreen = ({ navigation, route }: any) => {
         setScannedProduct(null);
     };
 
+    const pickImage = async () => {
+        try {
+            console.log("Starting pickImage...");
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+            console.log("ImagePicker result:", result.canceled ? "Canceled" : "Selected");
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const uri = result.assets[0].uri;
+                console.log("Selected Image URI:", uri);
+                const analysis = await analyzeImage(uri);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                if (analysis) {
+                    navigation.navigate('MealEntry', {
+                        prefilledName: analysis.food_name,
+                        prefilledCalories: analysis.calories,
+                        prefilledProtein: analysis.protein,
+                        prefilledFat: analysis.fat,
+                        prefilledCarbs: analysis.carbs,
+                        imageUri: uri,
+                        date,
+                        mealType,
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Error picking image:", error);
+            Alert.alert(t('error'), t('failedToPickImage') || "Failed to pick image.");
+        }
+    };
+
     const takePicture = async () => {
         if (cameraRef.current) {
             try {
@@ -170,14 +232,14 @@ const ScannerScreen = ({ navigation, route }: any) => {
                 }
             } catch (error) {
                 console.error("Failed to take picture", error);
-                Alert.alert(t('error'), "Failed to take picture.");
+                Alert.alert(t('error'), t('failedToTakePicture') || "Failed to take picture.");
             }
         }
     };
 
     return (
         <View style={styles.container}>
-            <CameraView
+            {isFocused && <CameraView
                 ref={cameraRef}
                 style={styles.camera}
                 facing={facing}
@@ -227,23 +289,23 @@ const ScannerScreen = ({ navigation, route }: any) => {
                         </Text>
 
                         {mode === 'ai' && (
-                            <TouchableOpacity style={styles.captureButton} onPress={takePicture} disabled={aiLoading}>
-                                <View style={styles.captureButtonInner} />
-                            </TouchableOpacity>
+                            <View style={styles.aiControlsContainer}>
+                                <TouchableOpacity style={styles.galleryButton} onPress={pickImage} disabled={aiLoading}>
+                                    <Ionicons name="images" size={30} color="white" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.captureButton} onPress={takePicture} disabled={aiLoading}>
+                                    <View style={styles.captureButtonInner} />
+                                </TouchableOpacity>
+                                <View style={{ width: 50 }} />
+                            </View>
                         )}
-                        {mode === 'barcode' && (
-                            <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-                                <Ionicons name="close-circle" size={50} color="white" />
-                            </TouchableOpacity>
-                        )}
-                        {mode === 'ai' && (
-                            <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-                                <Text style={{ color: 'white', marginTop: 20 }}>Cancel</Text>
-                            </TouchableOpacity>
-                        )}
+
+                        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+                            <Ionicons name="close-circle" size={50} color="white" />
+                        </TouchableOpacity>
                     </View>
                 </View>
-            </CameraView>
+            </CameraView>}
             <AILoadingScreen visible={loading || aiLoading} />
 
             <Modal
@@ -285,7 +347,7 @@ const ScannerScreen = ({ navigation, route }: any) => {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </View >
     );
 };
 
@@ -450,6 +512,22 @@ const styles = StyleSheet.create({
     },
     modeTextActive: {
         color: 'white',
+        fontWeight: "bold",
+    },
+    aiControlsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        width: '100%',
+        marginBottom: 20,
+    },
+    galleryButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     captureButton: {
         width: 70,
@@ -458,7 +536,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
     },
     captureButtonInner: {
         width: 60,

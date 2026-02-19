@@ -104,11 +104,11 @@ export default async function foodRoutes(fastify: FastifyInstance) {
             // Format OFF Results
             const formattedOffResults: FormattedProduct[] = offResults.map((p: any) => ({
                 barcode: p.barcode,
-                name: p.product_name,
-                calories: p.nutriments['energy-kcal_100g'] || 0,
-                protein: p.nutriments.proteins_100g || 0,
-                fat: p.nutriments.fat_100g || 0,
-                carbs: p.nutriments.carbohydrates_100g || 0,
+                name: p.product_name || "Unknown Product",
+                calories: p.nutriments?.['energy-kcal_100g'] || 0,
+                protein: p.nutriments?.proteins_100g || 0,
+                fat: p.nutriments?.fat_100g || 0,
+                carbs: p.nutriments?.carbohydrates_100g || 0,
                 source: 'openfoodfacts_search'
             }));
 
@@ -121,7 +121,8 @@ export default async function foodRoutes(fastify: FastifyInstance) {
                 const parseVal = (str: string, key: string) => {
                     const regex = new RegExp(`${key}:\\s*([0-9\\.]+)`);
                     const match = str.match(regex);
-                    return match ? parseFloat(match[1]) : 0;
+                    const val = match ? parseFloat(match[1]) : 0;
+                    return isNaN(val) ? 0 : val;
                 };
 
                 return {
@@ -178,28 +179,36 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
         } catch (error) {
             fastify.log.error(error);
+            console.error('Search Endpoint Error:', error);
             return reply.code(500).send({ error: 'Search failed' });
         }
     });
 
     // Endpoint for manual creation if needed
+    // Endpoint for manual creation if needed
     fastify.post('/create', async (request, reply) => {
         const { barcode, name, calories, protein, fat, carbs } = request.body as any;
 
+        // Auto-generate barcode if not provided
+        const finalBarcode = barcode || `manual_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
         try {
-            const product = await prisma.foodProduct.create({
-                data: {
-                    barcode,
+            const product = await prisma.foodProduct.upsert({
+                where: { barcode: finalBarcode },
+                update: {}, // Don't update if exists, just return it
+                create: {
+                    barcode: finalBarcode,
                     name,
-                    calories,
-                    protein,
-                    fat,
-                    carbs,
+                    calories: parseFloat(calories),
+                    protein: parseFloat(protein),
+                    fat: parseFloat(fat),
+                    carbs: parseFloat(carbs),
                     source: 'manual'
                 }
             });
             return product;
-        } catch {
+        } catch (error) {
+            fastify.log.error(error);
             return reply.code(400).send({ error: 'Failed to create product' });
         }
     });

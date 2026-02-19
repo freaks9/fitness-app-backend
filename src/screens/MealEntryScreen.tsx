@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Button, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
 import { FoodItem, JAPANESE_FOOD_DATABASE } from '../data/japaneseFood';
-import { searchFood } from '../services/foodApiService';
+import { getDailyLogs, searchFood } from '../services/foodApiService';
 import { supabase } from '../services/supabaseClient';
 
 const MealEntryScreen = ({ navigation, route }: any) => {
@@ -20,6 +20,10 @@ const MealEntryScreen = ({ navigation, route }: any) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [apiResults, setApiResults] = useState<FoodItem[]>([]);
     const [isSearchingApi, setIsSearchingApi] = useState(false);
+
+    // Local Search State
+    const [myFoods, setMyFoods] = useState<FoodItem[]>([]);
+    const [filteredMyFoods, setFilteredMyFoods] = useState<FoodItem[]>([]);
     const [quantity, setQuantity] = useState('1');
     const [baseNutrients, setBaseNutrients] = useState({
         calories: 0,
@@ -30,8 +34,62 @@ const MealEntryScreen = ({ navigation, route }: any) => {
 
     const [imageUri, setImageUri] = useState<string | null>(null);
 
+    const loadMyFoods = async () => {
+        try {
+            // 1. Load Local
+            const stored = await AsyncStorage.getItem('my_foods');
+            let localFoods: FoodItem[] = [];
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) localFoods = parsed;
+                } catch (e) { console.log('Parse error', e); }
+            }
+
+            // 2. Sync with Today's Backend Logs (Disabled)
+            // const { data: { user } } = await supabase.auth.getUser();
+            const user: any = null; // Force skip sync
+            if (user) {
+                try {
+                    const dailyLogs = await getDailyLogs(user.id);
+                    // dailyLogs: { logs: [{ foodProduct: { name, calories, ... }, ... }] }
+                    if (dailyLogs && dailyLogs.logs) {
+                        const todayItems: FoodItem[] = dailyLogs.logs.map((log: any) => ({
+                            id: log.foodProduct.barcode || `log_${log.id}`,
+                            name: log.foodProduct.name,
+                            calories: log.foodProduct.calories,
+                            protein: log.foodProduct.protein,
+                            fat: log.foodProduct.fat,
+                            carbs: log.foodProduct.carbs,
+                            category: 'Recent Log'
+                        }));
+
+                        // Merge uniqueness based on Name + Calories (approx)
+                        const combined = [...localFoods];
+                        todayItems.forEach(item => {
+                            if (!combined.some(existing => existing.name === item.name)) {
+                                combined.push(item);
+                            }
+                        });
+
+                        localFoods = combined;
+                        // Save back to local storage
+                        await AsyncStorage.setItem('my_foods', JSON.stringify(localFoods));
+                    }
+                } catch (err) {
+                    console.log('Failed to sync daily logs', err);
+                }
+            }
+
+            setMyFoods(localFoods);
+        } catch (e) {
+            console.error('Failed to load my foods', e);
+        }
+    };
+
     useEffect(() => {
         navigation.setOptions({ title: t('addMeal') });
+        loadMyFoods();
     }, [navigation, language, t]);
 
     // Handle params from CameraScreen
@@ -61,6 +119,11 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         if (route.params?.imageUri) {
             setImageUri(route.params.imageUri);
         }
+        if (route.params?.triggerSearch && route.params?.prefilledName) {
+            setSearchQuery(route.params.prefilledName);
+            setModalVisible(true);
+            handleSearch(route.params.prefilledName);
+        }
     }, [route.params]);
 
     // Determine default meal type based on time or params
@@ -76,23 +139,10 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         else setMealType('snack');
     }, [route.params?.mealType]);
 
-    const [saveToDb, setSaveToDb] = useState(false);
-    const [myFoods, setMyFoods] = useState<FoodItem[]>([]);
 
-    useEffect(() => {
-        loadMyFoods();
-    }, []);
 
-    const loadMyFoods = async () => {
-        try {
-            const stored = await AsyncStorage.getItem('my_foods');
-            if (stored) {
-                setMyFoods(JSON.parse(stored));
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    };
+
+
 
     // Moved up to fix reference error
     const localFilteredFood = JAPANESE_FOOD_DATABASE.filter(item =>
@@ -116,23 +166,7 @@ const MealEntryScreen = ({ navigation, route }: any) => {
 
         setLoading(true);
         try {
-            // Save to "My Foods" database if requested
-            if (saveToDb) {
-                const newFoodItem: FoodItem = {
-                    id: `my_${Date.now()}`,
-                    name: mealName,
-                    calories: cal,
-                    protein: p,
-                    fat: f,
-                    carbs: c,
-                    category: 'Other'
-                };
-                const updatedMyFoods = [...myFoods, newFoodItem];
-                setMyFoods(updatedMyFoods);
-                await AsyncStorage.setItem('my_foods', JSON.stringify(updatedMyFoods));
-            }
 
-            // Import useAuth at the top level (added in a separate edit or assume implicit if I can't see imports, but I can see them. Need to add import first)
 
             // Determine date to use (passed from params or today)
             const dateToUse = route.params?.date ? new Date(route.params.date) : new Date();
@@ -148,7 +182,55 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                 console.log('Supabase error (expected if not setup):', error.message);
             }
 
-            // 2. Try to save to Backend via API (Fastify + SQLite)
+            // Auto-save to Public Database (Attempt)
+            let savedBarcode = route.params?.scannedBarcode;
+            try {
+                const { createProduct } = require('../services/foodApiService');
+                const barcodeToUse = route.params?.scannedBarcode;
+
+                const savedProduct = await createProduct({
+                    barcode: barcodeToUse,
+                    name: mealName,
+                    calories: baseNutrients.calories,
+                    protein: baseNutrients.protein,
+                    fat: baseNutrients.fat,
+                    carbs: baseNutrients.carbs,
+                });
+                console.log("Auto-saved to public database:", savedProduct.barcode);
+                savedBarcode = savedProduct.barcode;
+
+            } catch (e) {
+                console.log("Skipping public DB save (might already exist or error):", e);
+                // If public save fails, generate a local ID if we don't have one
+                if (!savedBarcode) {
+                    savedBarcode = `local_${Date.now()}`;
+                }
+            }
+
+            // ALWAYS save to local "My Foods" for offline access/history
+            try {
+                const newFoodItem: FoodItem = {
+                    id: savedBarcode!,
+                    name: mealName,
+                    calories: cal,
+                    protein: p,
+                    fat: f,
+                    carbs: c,
+                    category: 'Other'
+                };
+
+                // Avoid duplicates
+                const updatedMyFoods = [...myFoods];
+                if (!updatedMyFoods.some(f => f.name === newFoodItem.name && f.calories === newFoodItem.calories)) {
+                    updatedMyFoods.push(newFoodItem);
+                    setMyFoods(updatedMyFoods);
+                    await AsyncStorage.setItem('my_foods', JSON.stringify(updatedMyFoods));
+                }
+            } catch (e) {
+                console.log("Failed to save to my_foods", e);
+            }
+
+            // 2. Try to save to Backend via API (Fastify + Prisma)
             // This ensures Dashboard (which fetches from backend) sees the data.
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
@@ -199,7 +281,8 @@ const MealEntryScreen = ({ navigation, route }: any) => {
             setFat('');
             setCarbs('');
             setImageUri(null);
-            navigation.goBack();
+            // navigate to Dashboard
+            navigation.navigate('Dashboard');
         } catch (e) {
             console.error(e);
             Alert.alert(t('error'), 'Failed to add meal.');
@@ -233,6 +316,12 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         if (text.length > 0) {
             setIsSearchingApi(true);
             try {
+                // 1. Search Local My Foods first
+                const localResults = myFoods.filter(item =>
+                    item.name.toLowerCase().includes(text.toLowerCase())
+                );
+                setFilteredMyFoods(localResults);
+
                 console.log('Searching API for:', text);
                 // Use backend search (cached)
                 const results = await searchFood(text);
@@ -252,6 +341,7 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                 setApiResults(mappedResults);
             } catch (error) {
                 console.error('Search Error:', error);
+                Alert.alert('Search Error', 'Failed to search food. ' + String(error));
             } finally {
                 setIsSearchingApi(false);
             }
@@ -287,198 +377,273 @@ const MealEntryScreen = ({ navigation, route }: any) => {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>{t('addMealTitle')}</Text>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+        >
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <View style={styles.container}>
+                    <Text style={styles.title}>{t('addMealTitle')}</Text>
 
-            {/* Meal Type Selection */}
-            <Text style={styles.label}>{t('mealType')}</Text>
-            <View style={styles.mealTypeContainer}>
-                {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
-                    <TouchableOpacity
-                        key={type}
-                        style={[styles.mealTypeButton, mealType === type && styles.mealTypeButtonSelected]}
-                        onPress={() => setMealType(type)}
-                    >
-                        <Text style={[styles.mealTypeText, mealType === type && styles.mealTypeTextSelected]}>
-                            {t(type)}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+                    {/* Meal Type Selection */}
+                    <Text style={styles.label}>{t('mealType')}</Text>
+                    <View style={styles.mealTypeContainer}>
+                        {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
+                            <TouchableOpacity
+                                key={type}
+                                style={[styles.mealTypeButton, mealType === type && styles.mealTypeButtonSelected]}
+                                onPress={() => setMealType(type)}
+                            >
+                                <Text style={[styles.mealTypeText, mealType === type && styles.mealTypeTextSelected]}>
+                                    {t(type)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
 
-            {/* Image Preview */}
-            {imageUri && (
-                <View style={styles.imagePreviewContainer}>
-                    <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-                    <TouchableOpacity onPress={() => setImageUri(null)} style={styles.removeImageButton}>
-                        <Text style={{ color: 'white' }}>X</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            <View style={styles.inputContainer}>
-                <Text style={styles.label}>{t('mealName')}</Text>
-                <View>
-                    <TextInput
-                        style={styles.input}
-                        value={mealName}
-                        onChangeText={(text) => {
-                            setMealName(text);
-                            setShowSuggestions(true);
-                        }}
-                        placeholder="e.g. Grilled Chicken Salad"
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    />
-                    {showSuggestions && suggestions.length > 0 && (
-                        <View style={styles.suggestionsContainer}>
-                            {suggestions.map((item) => (
-                                <TouchableOpacity key={item.id} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
-                                    <Text>{item.name} ({item.calories} kcal)</Text>
-                                </TouchableOpacity>
-                            ))}
+                    {/* Image Preview */}
+                    {imageUri && (
+                        <View style={styles.imagePreviewContainer}>
+                            <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+                            <TouchableOpacity onPress={() => setImageUri(null)} style={styles.removeImageButton}>
+                                <Text style={{ color: 'white' }}>X</Text>
+                            </TouchableOpacity>
                         </View>
                     )}
-                </View>
-            </View>
 
-            <View style={styles.inputContainer}>
-                <Text style={styles.label}>{t('quantity')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        keyboardType="numeric"
-                        value={quantity}
-                        onChangeText={updateQuantity}
-                        placeholder="1"
-                    />
-                    <Text style={{ marginLeft: 10, fontSize: 16 }}>{t('servings')}</Text>
-                </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-                <Text style={styles.label}>{t('calories')} (kcal)</Text>
-                <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={calories}
-                    onChangeText={(text) => {
-                        setCalories(text);
-                        const val = parseFloat(text);
-                        const q = parseFloat(quantity);
-                        if (!isNaN(val) && !isNaN(q) && q > 0) {
-                            setBaseNutrients(prev => ({ ...prev, calories: val / q }));
-                        }
-                    }}
-                    placeholder="e.g. 450"
-                />
-            </View>
-
-            {/* New P/F/C Input Fields */}
-            <View style={styles.pfcRow}>
-                <TextInput
-                    style={[styles.input, styles.pfcInput]}
-                    placeholder={`${t('protein')} (${t('g')})`}
-                    keyboardType="numeric"
-                    value={protein}
-                    onChangeText={(text) => {
-                        setProtein(text);
-                        const val = parseFloat(text);
-                        const q = parseFloat(quantity);
-                        if (!isNaN(val) && !isNaN(q) && q > 0) {
-                            setBaseNutrients(prev => ({ ...prev, protein: val / q }));
-                        }
-                    }}
-                />
-                <TextInput
-                    style={[styles.input, styles.pfcInput]}
-                    placeholder={`${t('fat')} (${t('g')})`}
-                    keyboardType="numeric"
-                    value={fat}
-                    onChangeText={(text) => {
-                        setFat(text);
-                        const val = parseFloat(text);
-                        const q = parseFloat(quantity);
-                        if (!isNaN(val) && !isNaN(q) && q > 0) {
-                            setBaseNutrients(prev => ({ ...prev, fat: val / q }));
-                        }
-                    }}
-                />
-                <TextInput
-                    style={[styles.input, styles.pfcInput]}
-                    placeholder={`${t('carbs')} (${t('g')})`}
-                    keyboardType="numeric"
-                    value={carbs}
-                    onChangeText={(text) => {
-                        setCarbs(text);
-                        const val = parseFloat(text);
-                        const q = parseFloat(quantity);
-                        if (!isNaN(val) && !isNaN(q) && q > 0) {
-                            setBaseNutrients(prev => ({ ...prev, carbs: val / q }));
-                        }
-                    }}
-                />
-            </View>
-
-            <View style={styles.checkboxContainer}>
-                <TouchableOpacity onPress={() => setSaveToDb(!saveToDb)} style={styles.checkboxTouch}>
-                    <Text style={styles.checkboxLabel}>
-                        {saveToDb ? '✅' : '⬜'} {t('saveToMyFoods') || "Save to My Foods DB"}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.actionButtons}>
-                <Button title={`📷 ${t('scan')} with AI`} onPress={() => navigation.navigate('Camera')} />
-                <View style={{ height: 10 }} />
-                <Button title="🔍 食事を探す" onPress={() => setModalVisible(true)} color="#FF9500" />
-            </View>
-
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                    style={[styles.addButton, loading && { opacity: 0.7 }]}
-                    onPress={addMeal}
-                    disabled={loading}
-                >
-                    <Text style={styles.addButtonText}>
-                        {loading ? t('analyzing') : '決定'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Food Search Modal */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <View style={styles.modalView}>
-                    <Text style={styles.modalTitle}>{t('selectFood') || "Select Food"}</Text>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search (e.g. Cola, Ramen)"
-                        value={searchQuery}
-                        onChangeText={handleSearch}
-                    />
-                    {isSearchingApi && <Text style={{ textAlign: 'center', marginBottom: 10 }}>Searching API...</Text>}
-                    <FlatList
-                        data={combinedResults}
-                        keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity style={styles.foodItem} onPress={() => selectFood(item)}>
-                                <View>
-                                    <Text style={styles.foodName}>{item.name}</Text>
-                                    <Text style={{ fontSize: 12, color: '#999' }}>{item.category}</Text>
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.label}>{t('mealName')}</Text>
+                        <View>
+                            <TextInput
+                                style={styles.input}
+                                value={mealName}
+                                onChangeText={(text) => {
+                                    setMealName(text);
+                                    setShowSuggestions(true);
+                                }}
+                                placeholder="e.g. Grilled Chicken Salad"
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                            />
+                            {showSuggestions && suggestions.length > 0 && (
+                                <View style={styles.suggestionsContainer}>
+                                    {suggestions.map((item) => (
+                                        <TouchableOpacity key={item.id} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
+                                            <Text>{item.name} ({item.calories} kcal)</Text>
+                                        </TouchableOpacity>
+                                    ))}
                                 </View>
-                                <Text style={styles.foodCal}>{item.calories} kcal</Text>
-                            </TouchableOpacity>
-                        )}
-                        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20 }}>No items found.</Text>}
-                    />
-                    <Button title="Close" onPress={() => setModalVisible(false)} color="red" />
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.label}>{t('quantity')}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                keyboardType="numeric"
+                                value={quantity}
+                                onChangeText={updateQuantity}
+                                placeholder="1"
+                            />
+                            <Text style={{ marginLeft: 10, fontSize: 16 }}>{t('servings')}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.label}>{t('calories')} (kcal)</Text>
+                        <TextInput
+                            style={styles.input}
+                            keyboardType="numeric"
+                            value={calories}
+                            onChangeText={(text) => {
+                                setCalories(text);
+                                const val = parseFloat(text);
+                                const q = parseFloat(quantity);
+                                if (!isNaN(val) && !isNaN(q) && q > 0) {
+                                    setBaseNutrients(prev => ({ ...prev, calories: val / q }));
+                                }
+                            }}
+                            placeholder="e.g. 450"
+                        />
+                    </View>
+
+                    {/* New P/F/C Input Fields */}
+                    <View style={styles.pfcRow}>
+                        <TextInput
+                            style={[styles.input, styles.pfcInput]}
+                            placeholder={`${t('protein')} (${t('g')})`}
+                            keyboardType="numeric"
+                            value={protein}
+                            onChangeText={(text) => {
+                                setProtein(text);
+                                const val = parseFloat(text);
+                                const q = parseFloat(quantity);
+                                if (!isNaN(val) && !isNaN(q) && q > 0) {
+                                    setBaseNutrients(prev => ({ ...prev, protein: val / q }));
+                                }
+                            }}
+                        />
+                        <TextInput
+                            style={[styles.input, styles.pfcInput]}
+                            placeholder={`${t('fat')} (${t('g')})`}
+                            keyboardType="numeric"
+                            value={fat}
+                            onChangeText={(text) => {
+                                setFat(text);
+                                const val = parseFloat(text);
+                                const q = parseFloat(quantity);
+                                if (!isNaN(val) && !isNaN(q) && q > 0) {
+                                    setBaseNutrients(prev => ({ ...prev, fat: val / q }));
+                                }
+                            }}
+                        />
+                        <TextInput
+                            style={[styles.input, styles.pfcInput]}
+                            placeholder={`${t('carbs')} (${t('g')})`}
+                            keyboardType="numeric"
+                            value={carbs}
+                            onChangeText={(text) => {
+                                setCarbs(text);
+                                const val = parseFloat(text);
+                                const q = parseFloat(quantity);
+                                if (!isNaN(val) && !isNaN(q) && q > 0) {
+                                    setBaseNutrients(prev => ({ ...prev, carbs: val / q }));
+                                }
+                            }}
+                        />
+                    </View>
+
+
+
+                    <View style={styles.actionButtons}>
+                        <Button
+                            title={`📷 ${t('scan')}`}
+                            onPress={() => {
+                                if (Platform.OS === 'ios') {
+                                    ActionSheetIOS.showActionSheetWithOptions(
+                                        {
+                                            options: [t('cancel'), t('barcode') || "Barcode", t('aiScan') || "Food Photo (AI)", t('labelScan') || "Nutrition Label"],
+                                            cancelButtonIndex: 0,
+                                            title: t('selectScanMode') || "Select Scan Mode",
+                                            message: t('chooseScanOptions') || "Choose how you want to add food",
+                                        },
+                                        (buttonIndex) => {
+                                            if (buttonIndex === 1) {
+                                                navigation.navigate('Scanner', { date: route.params?.date, mealType, mode: 'barcode' });
+                                            } else if (buttonIndex === 2) {
+                                                navigation.navigate('Scanner', { date: route.params?.date, mealType, mode: 'ai' });
+                                            } else if (buttonIndex === 3) {
+                                                navigation.navigate('LabelScanner', { date: route.params?.date, mealType });
+                                            }
+                                        }
+                                    );
+                                } else {
+                                    Alert.alert(
+                                        t('selectScanMode') || "Select Scan Mode",
+                                        t('chooseScanOptions') || "Choose how you want to add food",
+                                        [
+                                            { text: t('barcode') || "Barcode", onPress: () => navigation.navigate('Scanner', { date: route.params?.date, mealType, mode: 'barcode' }) },
+                                            { text: t('aiScan') || "Food Photo (AI)", onPress: () => navigation.navigate('Scanner', { date: route.params?.date, mealType, mode: 'ai' }) },
+                                            { text: t('labelScan') || "Nutrition Label", onPress: () => navigation.navigate('LabelScanner', { date: route.params?.date, mealType }) },
+                                            { text: t('cancel'), style: 'cancel' }
+                                        ]
+                                    );
+                                }
+                            }}
+                        />
+                        <View style={{ height: 10 }} />
+                        <Button title="🔍 食事を探す" onPress={() => setModalVisible(true)} color="#FF9500" />
+                    </View>
+
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity
+                            style={[styles.addButton, loading && { opacity: 0.7 }]}
+                            onPress={addMeal}
+                            disabled={loading}
+                        >
+                            <Text style={styles.addButtonText}>
+                                {loading ? t('analyzing') : t('add')}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Food Search Modal */}
+                    <Modal
+                        animationType="slide"
+                        transparent={true}
+                        visible={modalVisible}
+                        onRequestClose={() => setModalVisible(false)}
+                    >
+                        <View style={styles.modalView}>
+                            <Text style={styles.modalTitle}>{t('selectFood') || "Select Food"}</Text>
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search (e.g. Cola, Ramen)"
+                                value={searchQuery}
+                                onChangeText={handleSearch}
+                            />
+                            {isSearchingApi ? (
+                                <View style={{ alignItems: 'center', padding: 20 }}>
+                                    <ActivityIndicator size="large" color="#007AFF" />
+                                    <Text style={{ marginTop: 10, color: '#666' }}>Searching...</Text>
+                                </View>
+                            ) : (
+                                <View>
+                                    {filteredMyFoods.length > 0 && (
+                                        <View>
+                                            <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>My Foods</Text>
+                                            {filteredMyFoods.map((item, index) => (
+                                                <TouchableOpacity key={`local_${index}`} style={styles.foodItem} onPress={() => selectFood(item)}>
+                                                    <View>
+                                                        <Text style={styles.foodName}>{item.name}</Text>
+                                                        <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                    </View>
+                                                    <Text style={{ color: '#4CAF50' }}>★</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {apiResults.length > 0 && (
+                                        <View>
+                                            <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>Search Results</Text>
+                                            {apiResults.map((item) => (
+                                                <TouchableOpacity key={item.id} style={styles.foodItem} onPress={() => selectFood(item)}>
+                                                    <View>
+                                                        <Text style={styles.foodName}>{item.name}</Text>
+                                                        <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                    </View>
+                                                    <Text style={styles.foodCal}>+</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {filteredMyFoods.length === 0 && apiResults.length === 0 && searchQuery.length > 0 && (
+                                        <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>
+                                            No items found.
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
+                            {/* Add "Use Scanned Data" button for AI flow */}
+                            {searchQuery.length > 0 && (
+                                <View style={{ marginBottom: 10 }}>
+                                    <Button
+                                        title={`✅ ${t('useAiData') || "Use Scanned Data"}`}
+                                        onPress={() => setModalVisible(false)}
+                                        color="#34C759"
+                                    />
+                                </View>
+                            )}
+                            <Button title={t('cancel')} onPress={() => setModalVisible(false)} color="red" />
+                        </View>
+                    </Modal>
                 </View>
-            </Modal>
-        </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 };
 
@@ -486,7 +651,9 @@ const styles = StyleSheet.create({
     container: {
         padding: 20,
         backgroundColor: '#fff',
-        flex: 1,
+    },
+    scrollContainer: {
+        paddingBottom: 100, // Ensure content is scrollable past the bottom
     },
     title: {
         fontSize: 24,
@@ -651,6 +818,28 @@ const styles = StyleSheet.create({
     checkboxLabel: {
         fontSize: 16,
         color: '#007AFF',
+    },
+    quickSizeContainer: {
+        marginTop: 10,
+    },
+    quickSizeLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 5,
+    },
+    quickSizeButtons: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    sizeButton: {
+        backgroundColor: '#e1e1e1',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 15,
+    },
+    sizeButtonText: {
+        fontSize: 14,
+        color: '#333',
     },
 });
 

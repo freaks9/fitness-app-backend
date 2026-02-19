@@ -37,6 +37,18 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Fitness App to access your camera to scan food barcodes and labels."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Fitness App to access your photos to analyze food images."
+        }
       ]
     ]
   }
