@@ -147,5 +147,32 @@ export default async function mealLogRoutes(fastify: FastifyInstance) {
             return reply.code(500).send({ error: 'Internal Server Error' });
         }
     });
+
+    fastify.delete('/meal/:id', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        try {
+            await prisma.mealLog.delete({
+                where: { id: parseInt(id) }
+            });
+            return { message: 'Meal deleted successfully' };
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.code(500).send({ error: 'Failed to delete meal' });
+        }
+    });
+
+    // Delete all logs for a specific food (Clear History Item)
+    fastify.delete('/history/:userId/:barcode', async (request, reply) => {
+        const { userId, barcode } = request.params as { userId: string, barcode: string };
+        try {
+            await prisma.mealLog.deleteMany({
+                where: { userId, foodId: barcode }
+            });
+            return { message: 'History item deleted successfully' };
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.code(500).send({ error: 'Failed to delete history item' });
+        }
+    });
 }
 

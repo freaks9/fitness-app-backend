@@ -57,15 +57,70 @@ export default async function foodRoutes(fastify: FastifyInstance) {
         }
 
         try {
-            // 1. Search Local DB first
+            // 1. Search Local DB with Fuzzy Vowels
+            const wanakana = require('wanakana');
+
+            // Helper to generate vowel permutations (ramen -> raamen, rameen, raameen)
+            const permuteVowels = (str: string): string[] => {
+                const vowels = ['a', 'e', 'i', 'o', 'u'];
+                let results = [str];
+
+                // Simple approach: Double each vowel occurrence one by one
+                // For "ramen", indices of 'a' is 1, 'e' is 3.
+                // We will just generate a few common patterns: 
+                // 1. Double first vowel
+                // 2. Double second vowel
+                // 3. Double all vowels
+                // This is a heuristic.
+
+                // Better: Just regex replace each vowel with "vowel+" and expand? 
+                // Too complex for regex.
+                // Let's just create a set of candidate romaji strings.
+
+                const candidates = new Set<string>();
+                candidates.add(str);
+
+                // Strategy 1: Double every vowel (raamen -> らあめん)
+                const allDoubled = str.replace(/[aeiou]/g, (match) => match + match);
+                candidates.add(allDoubled);
+
+                // Strategy 2: Insert '-' after every vowel (ra-me-n -> ラーメーン)
+                const allDashed = str.replace(/[aeiou]/g, '$&-');
+                candidates.add(allDashed);
+
+                // Strategy 3: Insert '-' after FIRST vowel only (ra-men -> ラーメン)
+                // This is the most likely match for simple Katakana words like Ramen
+                const firstDashed = str.replace(/[aeiou]/, '$&-');
+                candidates.add(firstDashed);
+
+                return Array.from(candidates);
+            };
+
+            const rawTerms = permuteVowels(query);
+            const searchTerms = rawTerms.flatMap(t => [
+                t,
+                wanakana.toHiragana(t),
+                wanakana.toKatakana(t),
+                wanakana.toKana(t)
+            ]).filter((v, i, a) => v && v.length > 0 && a.indexOf(v) === i);
+
+            console.log('Fuzzy Search Terms:', searchTerms);
+
             const localResults = await prisma.foodProduct.findMany({
                 where: {
-                    name: {
-                        contains: query
-                    }
+                    OR: searchTerms.map(term => ({
+                        name: {
+                            contains: term
+                        }
+                    }))
                 },
-                take: 20
+                take: 50,
+                orderBy: { createdAt: 'desc' }
             });
+            console.log(`[DEBUG] Local Search: Found ${localResults.length} items for terms: ${JSON.stringify(searchTerms)}`);
+            if (localResults.length > 0) {
+                console.log(`[DEBUG] Local Items: ${localResults.map((p: any) => p.name).join(', ')}`);
+            }
 
             // If we have enough local results, return them (Cache Hit optimization)
             // DISABLED: To ensure we get FatSecret results even if we have local items
@@ -173,7 +228,7 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
             // Filter out items already in localResults (by barcode)
             const localBarcodes = new Set(localResults.map(p => p.barcode));
-            const newResults = allFetchedResults.filter(p => !localBarcodes.has(p.barcode));
+            const newResults = allFetchedResults.filter((p: any) => !localBarcodes.has(p.barcode));
 
             return [...localResults, ...newResults];
 
@@ -210,6 +265,39 @@ export default async function foodRoutes(fastify: FastifyInstance) {
         } catch (error) {
             fastify.log.error(error);
             return reply.code(400).send({ error: 'Failed to create product' });
+        }
+    });
+
+    // Get food history (recent unique items)
+    fastify.get('/logs/:userId/history', async (request, reply) => {
+        const { userId } = request.params as { userId: string };
+        console.log(`[API] History requested for user: ${userId}`);
+        try {
+            const logs = await prisma.mealLog.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: 50,
+                include: { foodProduct: true }
+            });
+
+            console.log(`[API] Found ${logs.length} logs for user ${userId}`);
+
+            // Deduplicate by foodId
+            const uniqueFoods = new Map();
+            logs.forEach((log: any) => {
+                if (log.foodProduct && !uniqueFoods.has(log.foodId)) {
+                    uniqueFoods.set(log.foodId, log.foodProduct);
+                } else if (!log.foodProduct) {
+                    console.warn(`[API] Log ${log.id} has no foodProduct related! foodId: ${log.foodId}`);
+                }
+            });
+
+            console.log(`[API] Returning ${uniqueFoods.size} unique history items`);
+            return { history: Array.from(uniqueFoods.values()) };
+        } catch (error) {
+            console.error('[API] History Error:', error);
+            fastify.log.error(error);
+            return reply.code(500).send({ error: 'Failed to fetch history' });
         }
     });
 }

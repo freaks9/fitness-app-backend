@@ -19,9 +19,13 @@ export default async function aiRoutes(fastify: FastifyInstance) {
             } else {
                 return reply.code(500).send({ error: 'Failed to analyze meal image' });
             }
-        } catch (error) {
-            fastify.log.error('AI Meal Analysis Route Error:', error as any);
-            return reply.code(500).send({ error: 'Internal Server Error', message: (error as any).message });
+        } catch (error: any) {
+            fastify.log.error('AI Meal Analysis Route Error:', error);
+            const msg = error.message || '';
+            if (msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('Overloaded')) {
+                return reply.code(503).send({ error: 'AI Service Temporarily Unavailable', message: 'The AI service is currently experiencing high traffic. Please try again in a few minutes.' });
+            }
+            return reply.code(500).send({ error: 'Internal Server Error', message: msg });
         }
     });
 

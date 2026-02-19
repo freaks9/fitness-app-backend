@@ -1,5 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { prisma } from '../db';
+
 
 dotenv.config();
 
@@ -8,6 +11,8 @@ const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
     console.warn("⚠️ GEMINI_API_KEY is missing in .env file. AI Analysis will fail.");
+} else {
+    console.log(`[AI] Using API Key starting with: ${API_KEY.substring(0, 4)}... (Length: ${API_KEY.length})`);
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY || '');
@@ -53,44 +58,132 @@ const SYSTEM_PROMPT = `
 }
 `;
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const calculateBackoff = (attempt: number) => 2000 * Math.pow(2, attempt);
+
+// Helper function to handle generation with fallback and retries
+const generateWithFallback = async (systemPrompt: string, imagePart: any): Promise<string> => {
+    // gemini-2.0-flash-lite caused 400 Invalid Key error in simulation.
+    // Sticking to gemini-2.0-flash which causes 429 (Rate Limit) but is valid.
+    const models = ["gemini-2.0-flash"];
+    let lastError: any = null;
+
+    for (const modelName of models) {
+        let attempt = 0;
+        const maxRetriesPerModel = 2; // Try each model twice
+
+        while (attempt < maxRetriesPerModel) {
+            try {
+                console.log(`[AI] Attempting with model: ${modelName} (Try ${attempt + 1})`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent([systemPrompt, imagePart]);
+                const response = await result.response;
+                return response.text();
+
+            } catch (error: any) {
+                console.warn(`[AI] Error with ${modelName}:`, error.message);
+                lastError = error;
+
+                if (error.message.includes('429') || error.message.includes('Too Many Requests') || error.message.includes('503')) {
+                    attempt++;
+                    if (attempt < maxRetriesPerModel) {
+                        const waitTime = calculateBackoff(attempt);
+                        console.log(`[AI] Waiting ${waitTime}ms before retry...`);
+                        await delay(waitTime);
+                        continue;
+                    }
+                } else {
+                    // If it's not a temporary error (e.g., 400 Bad Request), don't retry this model
+                    break;
+                }
+            }
+            attempt++;
+        }
+        console.log(`[AI] Switching to next fallback model...`);
+    }
+    throw lastError || new Error("All AI models failed.");
+};
+
 export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysisResult | null> => {
     if (!API_KEY) {
         throw new Error("GEMINI_API_KEY is not configured");
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        console.log(`[AI] Received Image Length: ${base64Image ? base64Image.length : 0}`);
+        if (base64Image) console.log(`[AI] Base64 Start: ${base64Image.substring(0, 50)}...`);
+
+        // Strip prefix if present (common issue)
+        let cleanBase64 = base64Image;
+        if (base64Image && base64Image.includes('base64,')) {
+            console.log("[AI] Stripping data URI prefix...");
+            cleanBase64 = base64Image.split('base64,')[1];
+        }
 
         const imagePart = {
             inlineData: {
-                data: base64Image,
+                data: cleanBase64,
                 mimeType: "image/jpeg",
             },
         };
 
-        const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
-        const response = await result.response;
-        const text = response.text();
+        // --- CACHE IMPLEMENTATION (Prisma) ---
+        const imageHash = crypto.createHash('sha256').update(base64Image).digest('hex');
+        console.log(`[AI] Checking Cache for Hash: ${imageHash}`);
+
+        try {
+            const cached = await prisma.aiAnalysisCache.findUnique({
+                where: { imageHash: imageHash }
+            });
+
+            if (cached) {
+                console.log(`[AI] Cache HIT for hash: ${imageHash.substring(0, 8)}...`);
+                return JSON.parse(cached.resultJson);
+            }
+        } catch (dbError) {
+            console.warn("[AI] Cache check failed (continuing to API):", dbError);
+        }
+        // ----------------------------
+
+
+        const text = await generateWithFallback(SYSTEM_PROMPT, imagePart);
 
         console.log("--- Raw Gemini Response ---");
         console.log(text);
         console.log("---------------------------");
 
-        // Improved Robust JSON extraction
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        // Best Practice 3: Clean up Markdown before parsing
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             console.error("No JSON found in response:", text);
-            throw new Error(`AI Response did not contain valid JSON. Raw response: ${text.substring(0, 50)}...`);
+            throw new Error(`AI Response did not contain valid JSON.`);
         }
 
-        const analysis: MealAnalysisResult = JSON.parse(jsonMatch[0]);
-        return analysis;
+        const resultJSON = JSON.parse(jsonMatch[0]);
+
+        // --- SAVE TO CACHE (Prisma) ---
+        try {
+            await prisma.aiAnalysisCache.create({
+                data: {
+                    imageHash: imageHash,
+                    resultJson: JSON.stringify(resultJSON)
+                }
+            });
+            console.log(`[AI] Cache SAVED for hash: ${imageHash.substring(0, 8)}...`);
+        } catch (saveError) {
+            // Ignore duplicate key errors silently
+            console.error("[AI] Failed to save to cache:", saveError);
+        }
+        // ---------------------
+
+
+        return resultJSON;
 
     } catch (error: any) {
-        console.error("Gemini Analysis Error:", error);
-        if (error.response) {
-            console.error("Gemini API Error Response:", JSON.stringify(error.response, null, 2));
-        }
+        console.error("Gemini Analysis Final Error:", error.message);
         throw new Error(`Gemini API Error: ${error.message || error}`);
     }
 };
@@ -121,8 +214,6 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
         const imagePart = {
             inlineData: {
                 data: base64Image,
@@ -130,21 +221,19 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
             },
         };
 
-        const result = await model.generateContent([LABEL_SYSTEM_PROMPT, imagePart]);
-        const response = await result.response;
-        const text = response.text();
+        const text = await generateWithFallback(LABEL_SYSTEM_PROMPT, imagePart);
 
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             console.error("No JSON found in label response:", text);
-            throw new Error(`AI Label Response did not contain valid JSON. Raw response: ${text.substring(0, 50)}...`);
+            throw new Error(`AI Label Response did not contain valid JSON.`);
         }
 
-        const analysis = JSON.parse(jsonMatch[0]);
-        return analysis;
+        return JSON.parse(jsonMatch[0]);
 
     } catch (error: any) {
-        console.error("Gemini Label Analysis Error:", error);
+        console.error("Gemini Label Analysis Final Error:", error.message);
         throw new Error(`Gemini Label API Error: ${error.message || error}`);
     }
 };

@@ -205,11 +205,30 @@ const DashboardScreen = ({ navigation }: any) => {
 
                             const updatedMeals = todaysMeals.filter((m: any) => m !== mealToDelete);
 
+                            // Delete from Backend if backendId exists
+                            // Need to import deleteMealLog first
+                            if (mealToDelete.backendId) {
+                                try {
+                                    const { deleteMealLog } = require('../services/foodApiService');
+                                    console.log('Deleting from backend:', mealToDelete.backendId);
+                                    await deleteMealLog(mealToDelete.backendId);
+                                    console.log('Backend delete success');
+                                } catch (err) {
+                                    console.log('Backend delete failed', err);
+                                    // Should we stop? Probably not, prioritize local UI update
+                                }
+                            }
+
                             setTodaysMeals(updatedMeals);
 
                             // Update eaten totals
                             const dateStr = selectedDate.toISOString().split('T')[0];
-                            await AsyncStorage.setItem(`meals_${dateStr} `, JSON.stringify(updatedMeals));
+                            // Corrected key: previously had a space 'meals_${dateStr} ' which might be a bug or just a typo in previous retrieval
+                            // Check loadData: await AsyncStorage.getItem(`meals_${dateStr}`); -> No space
+                            // Check addMeal: await AsyncStorage.getItem(`meals_${dateStr}`); -> No space
+                            // Check deleteMeal: await AsyncStorage.getItem(`meals_${dateStr} `); -> HAS SPACE in my view_file output line 212!
+                            // I should fix this space bug too.
+                            await AsyncStorage.setItem(`meals_${dateStr}`, JSON.stringify(updatedMeals));
 
                             // Recalculate totals immediately for UI
                             const totalCalories = updatedMeals.reduce((sum: number, meal: any) => sum + (parseInt(meal.calories) || 0), 0);

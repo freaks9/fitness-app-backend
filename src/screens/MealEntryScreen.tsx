@@ -1,10 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Button, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
 import { FoodItem, JAPANESE_FOOD_DATABASE } from '../data/japaneseFood';
-import { getDailyLogs, searchFood } from '../services/foodApiService';
+import { deleteFoodHistory, getDailyLogs, getFoodHistory, logMeal, searchFood } from '../services/foodApiService';
 import { supabase } from '../services/supabaseClient';
+
+
+// 履歴として保存するキーの名前
+const HISTORY_KEY = 'food_search_history';
 
 const MealEntryScreen = ({ navigation, route }: any) => {
     const { t, language } = useLanguageContext();
@@ -24,7 +29,9 @@ const MealEntryScreen = ({ navigation, route }: any) => {
     // Local Search State
     const [myFoods, setMyFoods] = useState<FoodItem[]>([]);
     const [filteredMyFoods, setFilteredMyFoods] = useState<FoodItem[]>([]);
+    const [history, setHistory] = useState<FoodItem[]>([]); // New History State
     const [quantity, setQuantity] = useState('1');
+    const [savedBarcode, setSavedBarcode] = useState<string | null>(null); // Track selected barcode
     const [baseNutrients, setBaseNutrients] = useState({
         calories: 0,
         protein: 0,
@@ -87,10 +94,99 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         }
     };
 
-    useEffect(() => {
-        navigation.setOptions({ title: t('addMeal') });
-        loadMyFoods();
-    }, [navigation, language, t]);
+    useFocusEffect(
+        useCallback(() => {
+            navigation.setOptions({ title: t('addMeal') });
+            console.log('MealEntryScreen focused - Refreshing Data');
+            loadMyFoods();
+
+            // Step 2 implementation: Ensure history is fresh every time the screen is focused
+            const loadLatestHistory = async () => {
+                try {
+                    const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+                    if (storedHistory) {
+                        const parsed = JSON.parse(storedHistory);
+                        setHistory(parsed);
+                    }
+                } catch (error) {
+                    console.error('履歴の読み込みに失敗:', error);
+                }
+            };
+            loadLatestHistory();
+        }, [navigation, language, t])
+    );
+
+    const loadLocalHistory = async () => {
+        try {
+            const stored = await AsyncStorage.getItem(HISTORY_KEY);
+            if (stored) {
+                setHistory(JSON.parse(stored));
+            }
+        } catch (e) {
+            console.error('Failed to load local history', e);
+        }
+    };
+
+    const saveToLocalHistory = async (foodItem: FoodItem) => {
+        try {
+            // Remove duplicates and keep latest 10
+            const currentHistory = [...history];
+            const filtered = currentHistory.filter(item => item.name !== foodItem.name);
+            const newHistory = [foodItem, ...filtered].slice(0, 10);
+
+            setHistory(newHistory);
+            await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+        } catch (e) {
+            console.error('Failed to save to local history', e);
+        }
+    };
+
+    const clearLocalHistory = async () => {
+        try {
+            await AsyncStorage.removeItem(HISTORY_KEY);
+            setHistory([]);
+        } catch (e) {
+            console.error('Failed to clear history', e);
+        }
+    };
+
+    const historyLoadedRef = React.useRef(false); // Track if history was successfully loaded
+
+    const loadHistory = async (retryCount = 0) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            try {
+                console.log(`[History] Fetching for user: ${user.id} (Attempt ${retryCount + 1})`);
+                const historyData = await getFoodHistory(user.id);
+                console.log(`[History] Fetched ${historyData.length} items`);
+
+                // Map backend FoodProduct to FoodItem
+                const historyItems: FoodItem[] = historyData.map((item: any) => ({
+                    id: item.barcode,
+                    name: item.name,
+                    calories: item.calories,
+                    protein: item.protein,
+                    fat: item.fat,
+                    carbs: item.carbs,
+                    category: 'History'
+                }));
+                setHistory(historyItems);
+                historyLoadedRef.current = true;
+            } catch (e: any) {
+                console.warn('[History] Failed to load:', e.message);
+                // Retry logic if failed (limit to 3 retries)
+                if (retryCount < 2) {
+                    setTimeout(() => loadHistory(retryCount + 1), 1000);
+                }
+            }
+        } else {
+            console.warn('[History] No user logged in yet.');
+            // If checking excessively fast, user might not be set. Retry once.
+            if (retryCount < 2) {
+                setTimeout(() => loadHistory(retryCount + 1), 500);
+            }
+        }
+    };
 
     // Handle params from CameraScreen
     useEffect(() => {
@@ -118,6 +214,9 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         }
         if (route.params?.imageUri) {
             setImageUri(route.params.imageUri);
+        }
+        if (route.params?.scannedBarcode) {
+            setSavedBarcode(route.params.scannedBarcode);
         }
         if (route.params?.triggerSearch && route.params?.prefilledName) {
             setSearchQuery(route.params.prefilledName);
@@ -183,10 +282,21 @@ const MealEntryScreen = ({ navigation, route }: any) => {
             }
 
             // Auto-save to Public Database (Attempt)
-            let savedBarcode = route.params?.scannedBarcode;
+            let barcodeToUse = savedBarcode || route.params?.scannedBarcode;
             try {
                 const { createProduct } = require('../services/foodApiService');
-                const barcodeToUse = route.params?.scannedBarcode;
+
+                // If it's a search result from API (FatSecret/OFF), it might have a prefix we should clean or use as is.
+                // If it's 'off_...' from our mapping, we can try to extract real barcode.
+                if (barcodeToUse && barcodeToUse.startsWith('off_')) {
+                    const parts = barcodeToUse.split('_');
+                    if (parts.length >= 2) barcodeToUse = parts[1];
+                }
+
+                // If manual or no barcode, generate one
+                if (!barcodeToUse) {
+                    barcodeToUse = `manual_${Date.now()}`;
+                }
 
                 const savedProduct = await createProduct({
                     barcode: barcodeToUse,
@@ -197,20 +307,20 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                     carbs: baseNutrients.carbs,
                 });
                 console.log("Auto-saved to public database:", savedProduct.barcode);
-                savedBarcode = savedProduct.barcode;
+                barcodeToUse = savedProduct.barcode;
 
             } catch (e) {
                 console.log("Skipping public DB save (might already exist or error):", e);
                 // If public save fails, generate a local ID if we don't have one
-                if (!savedBarcode) {
-                    savedBarcode = `local_${Date.now()}`;
+                if (!barcodeToUse) {
+                    barcodeToUse = `local_${Date.now()}`;
                 }
             }
 
             // ALWAYS save to local "My Foods" for offline access/history
             try {
                 const newFoodItem: FoodItem = {
-                    id: savedBarcode!,
+                    id: barcodeToUse!,
                     name: mealName,
                     calories: cal,
                     protein: p,
@@ -231,27 +341,22 @@ const MealEntryScreen = ({ navigation, route }: any) => {
             }
 
             // 2. Try to save to Backend via API (Fastify + Prisma)
-            // This ensures Dashboard (which fetches from backend) sees the data.
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
+            let backendLogId = null;
+
+            if (user && barcodeToUse) {
                 try {
-                    // Let's try to log if we can.
-
-                    // For this fix, let's rely on Local Storage primarily but ALSO try backend if possible,
-                    // BUT currently Dashboard expects backend data if logged in. 
-                    // CRITICAL: Dashboard prioritizes backend. If backend has 0, it shows 0.
-                    // We MUST sync to backend.
-
-                    // Workaround: If manual entry, we can't easily sync to backend without creating a product.
-                    // For now, let's just log to console if we can't sync.
-
-                    // actually, let's use the logMeal API
-                    // We need the food ID. 
-                    // If apiResults were used, we have `off_...`. 
-                    // If manual, we don't.
+                    console.log(`Logging meal to backend: User=${user.id}, Barcode=${barcodeToUse}, Qty=${quantity}, MealType=${mealType}`);
+                    const response = await logMeal(user.id, barcodeToUse, parseFloat(quantity), mealType, fullIsoString);
+                    if (response && response.log) {
+                        backendLogId = response.log.id;
+                    }
+                    console.log("Backend log success, ID:", backendLogId);
                 } catch (err) {
                     console.log("Backend sync failed", err);
                 }
+            } else {
+                console.log("Skipping backend log: No user or no barcode");
             }
 
             // 2. Save to Local Storage with correct date
@@ -262,6 +367,7 @@ const MealEntryScreen = ({ navigation, route }: any) => {
             // Create new meal object
             const newMeal = {
                 id: Date.now().toString(),
+                backendId: backendLogId, // Store backend ID
                 name: mealName,
                 calories: cal,
                 protein: p,
@@ -297,6 +403,7 @@ const MealEntryScreen = ({ navigation, route }: any) => {
 
     const selectSuggestion = (item: FoodItem) => {
         setMealName(item.name);
+        setSavedBarcode(item.id); // Save barcode
         setCalories(item.calories.toString());
         setProtein(item.protein?.toString() || '0');
         setFat(item.fat?.toString() || '0');
@@ -309,26 +416,49 @@ const MealEntryScreen = ({ navigation, route }: any) => {
         });
         setQuantity('1');
         setShowSuggestions(false);
+        saveToLocalHistory(item); // User requested step
     };
 
-    const handleSearch = async (text: string) => {
+    // Debounce Logic
+    const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
+    const lastSearchReqId = React.useRef(0);
+
+    const handleSearch = (text: string) => {
         setSearchQuery(text);
-        if (text.length > 0) {
-            setIsSearchingApi(true);
+
+        // Clear previous timeout
+        if (searchTimeout.current) {
+            clearTimeout(searchTimeout.current);
+        }
+
+        if (text.length === 0) {
+            setApiResults([]);
+            setFilteredMyFoods([]);
+            setIsSearchingApi(false);
+            return;
+        }
+
+        // 1. Instant Local Filter (No debounce needed/Short debounce)
+        const localResults = myFoods.filter(item =>
+            item.name.toLowerCase().includes(text.toLowerCase())
+        );
+        setFilteredMyFoods(localResults);
+
+        // 2. Debounced API Search
+        setIsSearchingApi(true); // Show loading immediately to indicate work
+        searchTimeout.current = setTimeout(async () => {
+            const currentReqId = ++lastSearchReqId.current;
             try {
-                // 1. Search Local My Foods first
-                const localResults = myFoods.filter(item =>
-                    item.name.toLowerCase().includes(text.toLowerCase())
-                );
-                setFilteredMyFoods(localResults);
-
-                console.log('Searching API for:', text);
-                // Use backend search (cached)
+                console.log(`[Search] API Request #${currentReqId} for: "${text}"`);
                 const results = await searchFood(text);
-                console.log('API Results:', results.length);
 
-                // Map Backend/DB FoodProduct format to FoodItem
-                // Backend returns: { barcode, name, calories, protein, fat, carbs, ... }
+                // If newer request started, ignore this result
+                if (currentReqId !== lastSearchReqId.current) {
+                    console.log(`[Search] Ignoring stale result #${currentReqId}`);
+                    return;
+                }
+
+                console.log(`[Search] Results #${currentReqId}: ${results.length}`);
                 const mappedResults: FoodItem[] = results.map((item: any, index: number) => ({
                     id: `off_${item.barcode}_${index}`,
                     name: item.name,
@@ -340,18 +470,20 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                 }));
                 setApiResults(mappedResults);
             } catch (error) {
-                console.error('Search Error:', error);
-                Alert.alert('Search Error', 'Failed to search food. ' + String(error));
+                if (currentReqId === lastSearchReqId.current) {
+                    console.error('Search Error:', error);
+                }
             } finally {
-                setIsSearchingApi(false);
+                if (currentReqId === lastSearchReqId.current) {
+                    setIsSearchingApi(false);
+                }
             }
-        } else {
-            setApiResults([]);
-        }
+        }, 600); // 600ms debounce
     };
 
     const selectFood = (item: FoodItem) => {
         setMealName(item.name);
+        setSavedBarcode(item.id); // Save barcode
         setCalories(item.calories.toString());
         setProtein(item.protein?.toString() || '0');
         setFat(item.fat?.toString() || '0');
@@ -363,8 +495,35 @@ const MealEntryScreen = ({ navigation, route }: any) => {
             carbs: item.carbs || 0
         });
         setQuantity('1');
+        saveToLocalHistory(item); // User requested step
         setModalVisible(false);
     };
+
+    const handleDeleteHistory = async (item: FoodItem) => {
+        Alert.alert(
+            t('deleteHistory'),
+            t('confirmDeleteHistory') + `\n\n${item.name}`,
+            [
+                { text: t('cancel'), style: 'cancel' },
+                {
+                    text: t('delete'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                            try {
+                                await deleteFoodHistory(user.id, item.id);
+                                loadHistory(); // Refresh
+                            } catch (e) {
+                                Alert.alert(t('error'), "Failed to delete from history");
+                            }
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const updateQuantity = (val: string) => {
         setQuantity(val);
         const q = parseFloat(val);
@@ -577,57 +736,97 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                         onRequestClose={() => setModalVisible(false)}
                     >
                         <View style={styles.modalView}>
-                            <Text style={styles.modalTitle}>{t('selectFood') || "Select Food"}</Text>
+                            <Text style={styles.modalTitle}>{t('selectFood')}</Text>
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Search (e.g. Cola, Ramen)"
+                                placeholder={t('searchPlaceholder')}
                                 value={searchQuery}
                                 onChangeText={handleSearch}
                             />
-                            {isSearchingApi ? (
-                                <View style={{ alignItems: 'center', padding: 20 }}>
-                                    <ActivityIndicator size="large" color="#007AFF" />
-                                    <Text style={{ marginTop: 10, color: '#666' }}>Searching...</Text>
-                                </View>
-                            ) : (
-                                <View>
-                                    {filteredMyFoods.length > 0 && (
-                                        <View>
-                                            <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>My Foods</Text>
-                                            {filteredMyFoods.map((item, index) => (
-                                                <TouchableOpacity key={`local_${index}`} style={styles.foodItem} onPress={() => selectFood(item)}>
-                                                    <View>
-                                                        <Text style={styles.foodName}>{item.name}</Text>
-                                                        <Text style={styles.foodCal}>{item.calories} kcal</Text>
-                                                    </View>
-                                                    <Text style={{ color: '#4CAF50' }}>★</Text>
+                            <ScrollView style={{ flex: 1 }}>
+                                {/* Results and History section */}
+                                {searchQuery.length === 0 ? (
+                                    <View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 5 }}>
+                                            <Text style={{ fontWeight: 'bold', color: '#666', marginLeft: 5 }}>Recent History</Text>
+                                            {history.length > 0 && (
+                                                <TouchableOpacity onPress={clearLocalHistory}>
+                                                    <Text style={{ color: 'red', fontSize: 12, marginRight: 5 }}>消去</Text>
                                                 </TouchableOpacity>
-                                            ))}
+                                            )}
                                         </View>
-                                    )}
+                                        {history.length === 0 ? (
+                                            <View style={{ padding: 20, alignItems: 'center' }}>
+                                                <Text style={{ color: '#999', textAlign: 'center' }}>
+                                                    {t('noHistory') || "最近の履歴はありません"}
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <View>
+                                                {history.map((item, index) => (
+                                                    <TouchableOpacity
+                                                        key={`history_${index}`}
+                                                        style={styles.foodItem}
+                                                        onPress={() => selectFood(item)}
+                                                        onLongPress={() => handleDeleteHistory(item)} // Keep long press for backend removal if needed
+                                                    >
+                                                        <View>
+                                                            <Text style={styles.foodName}>{item.name}</Text>
+                                                            <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                        </View>
+                                                        <Text style={{ color: '#007AFF' }}>↻</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+                                    </View>
+                                ) : (
+                                    <View>
+                                        {isSearchingApi && apiResults.length === 0 && (
+                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                                <ActivityIndicator size="large" color="#007AFF" />
+                                                <Text style={{ marginTop: 10, color: '#666' }}>Searching...</Text>
+                                            </View>
+                                        )}
 
-                                    {apiResults.length > 0 && (
-                                        <View>
-                                            <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>Search Results</Text>
-                                            {apiResults.map((item) => (
-                                                <TouchableOpacity key={item.id} style={styles.foodItem} onPress={() => selectFood(item)}>
-                                                    <View>
-                                                        <Text style={styles.foodName}>{item.name}</Text>
-                                                        <Text style={styles.foodCal}>{item.calories} kcal</Text>
-                                                    </View>
-                                                    <Text style={styles.foodCal}>+</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    )}
+                                        {filteredMyFoods.length > 0 && (
+                                            <View>
+                                                <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>My Foods</Text>
+                                                {filteredMyFoods.map((item, index) => (
+                                                    <TouchableOpacity key={`local_${index}`} style={styles.foodItem} onPress={() => selectFood(item)}>
+                                                        <View>
+                                                            <Text style={styles.foodName}>{item.name}</Text>
+                                                            <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                        </View>
+                                                        <Text style={{ color: '#4CAF50' }}>★</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
 
-                                    {filteredMyFoods.length === 0 && apiResults.length === 0 && searchQuery.length > 0 && (
-                                        <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>
-                                            No items found.
-                                        </Text>
-                                    )}
-                                </View>
-                            )}
+                                        {apiResults.length > 0 && (
+                                            <View>
+                                                <Text style={{ fontWeight: 'bold', marginVertical: 5, color: '#666', marginLeft: 5 }}>Search Results</Text>
+                                                {apiResults.map((item) => (
+                                                    <TouchableOpacity key={item.id} style={styles.foodItem} onPress={() => selectFood(item)}>
+                                                        <View>
+                                                            <Text style={styles.foodName}>{item.name}</Text>
+                                                            <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                        </View>
+                                                        <Text style={styles.foodCal}>+</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {!isSearchingApi && filteredMyFoods.length === 0 && apiResults.length === 0 && searchQuery.length > 0 && (
+                                            <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>
+                                                No items found.
+                                            </Text>
+                                        )}
+                                    </View>
+                                )}
+                            </ScrollView>
                             {/* Add "Use Scanned Data" button for AI flow */}
                             {searchQuery.length > 0 && (
                                 <View style={{ marginBottom: 10 }}>
@@ -642,8 +841,8 @@ const MealEntryScreen = ({ navigation, route }: any) => {
                         </View>
                     </Modal>
                 </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+            </ScrollView >
+        </KeyboardAvoidingView >
     );
 };
 
@@ -689,6 +888,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
+        paddingBottom: 40,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,

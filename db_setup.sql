@@ -19,3 +19,10 @@ CREATE TABLE meal_logs (
   carbs DECIMAL,
   logged_at DATE DEFAULT CURRENT_DATE
 );
+
+-- AI Analysis Cache Table
+CREATE TABLE IF NOT EXISTS ai_analysis_cache (
+    image_hash TEXT PRIMARY KEY,
+    result_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
