@@ -1,17 +1,25 @@
 {
   "expo": {
-    "name": "fitness_app",
+    "name": "カララボ",
     "slug": "fitness_app",
     "version": "1.0.0",
+    "description": "AIコーチと共感する、次世代の食生活研究室。",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fitnessapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.colorlab.fitness",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.colorlab.fitness",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +27,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -41,15 +53,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Fitness App to access your camera to scan food barcodes and labels."
+          "cameraPermission": "食品のバーコードやパッケージをスキャンして解析するために、カメラへのアクセスを許可してください。"
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Fitness App to access your photos to analyze food images."
+          "photosPermission": "食事の画像を解析するために、写真ライブラリへのアクセスを許可してください。"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4c5319f4-a7a8-460c-957d-8abf83237296"
+      }
+    }
   }
 }
