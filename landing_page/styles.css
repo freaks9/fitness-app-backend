@@ -122,58 +122,38 @@ nav ul li a:hover {
 }
 
 .app-mockup {
-    width: 300px;
-    height: 600px;
+    width: 280px;
+    height: auto;
     background: #000;
-    border: 12px solid #333;
+    border: 8px solid #333;
     border-radius: 40px;
     margin: 0 auto;
     overflow: hidden;
-    box-shadow: 0 50px 100px rgba(0,0,0,0.5);
+    box-shadow: 0 50px 100px rgba(0, 0, 0, 0.5);
     position: relative;
+    aspect-ratio: 1242 / 2688;
 }
 
-.screen-content {
+.screenshot-img {
+    width: 100%;
     height: 100%;
-    background: #111;
-    padding: 40px 20px;
-    display: flex;
-    flex-direction: column;
+    object-fit: cover;
+    display: block;
 }
 
-.mock-header {
-    font-size: 18px;
-    font-weight: bold;
+.feature-img-container {
+    width: 100%;
     margin-bottom: 30px;
-}
-
-.mock-chart {
-    height: 180px;
-    background: linear-gradient(0deg, rgba(0,122,255,0.1) 0%, rgba(0,122,255,0.4) 100%);
     border-radius: 20px;
-    margin-bottom: 20px;
+    overflow: hidden;
+    background: #000;
+    border: 4px solid #333;
 }
 
-.stat {
-    background: #222;
-    padding: 15px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    font-size: 14px;
-}
-
-.stat span {
-    color: var(--text-sub);
-}
-
-.mock-advice {
-    margin-top: auto;
-    background: rgba(0,122,255,0.1);
-    border: 1px solid var(--primary-color);
-    padding: 15px;
-    border-radius: 12px;
-    color: var(--primary-color);
-    font-size: 12px;
+.feature-screenshot {
+    width: 100%;
+    height: auto;
+    display: block;
 }
 
 .features {
@@ -263,16 +243,20 @@ footer p {
     .container {
         padding: 0 20px;
     }
+
     .hero .container {
         grid-template-columns: 1fr;
         text-align: center;
     }
+
     .hero-content h1 {
         font-size: 40px;
     }
+
     .hero-content p {
         margin: 0 auto 40px;
     }
+
     .feature-grid {
         grid-template-columns: 1fr;
     }
