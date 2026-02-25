@@ -87,6 +87,7 @@ nav ul li a:hover {
 .gradient-text {
     background: var(--gradient);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -159,38 +160,92 @@ nav ul li a:hover {
 
 .features h2 {
     text-align: center;
-    font-size: 40px;
-    margin-bottom: 80px;
+    font-size: 44px;
+    margin-bottom: 100px;
 }
 
-.feature-grid {
+.feature-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 30px;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+    margin-bottom: 120px;
 }
 
-.feature-card {
-    background: var(--card-bg);
-    padding: 50px 40px;
-    border-radius: 30px;
-    transition: transform 0.3s;
+.feature-row.reverse {
+    direction: rtl;
 }
 
-.feature-card:hover {
-    transform: translateY(-10px);
+.feature-row.reverse .feature-text {
+    direction: ltr;
 }
 
-.feature-card .icon {
-    font-size: 48px;
-    margin-bottom: 30px;
-}
-
-.feature-card h3 {
-    font-size: 24px;
+.feature-text .badge {
+    display: inline-block;
+    padding: 6px 16px;
+    background: rgba(0, 122, 255, 0.1);
+    color: var(--primary-color);
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 14px;
     margin-bottom: 20px;
 }
 
-.feature-card p {
+.feature-text h3 {
+    font-size: 36px;
+    margin-bottom: 24px;
+}
+
+.feature-text p {
+    font-size: 18px;
+    color: var(--text-sub);
+}
+
+.feature-image {
+    max-width: 400px;
+    margin: 0 auto;
+    border-radius: 30px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+}
+
+.feature-screenshot {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.feature-grid-mini {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    margin-top: 60px;
+}
+
+.mini-card {
+    background: var(--card-bg);
+    padding: 40px;
+    border-radius: 24px;
+    transition: transform 0.3s;
+    text-align: center;
+}
+
+.mini-card:hover {
+    transform: translateY(-5px);
+}
+
+.mini-card .icon {
+    font-size: 32px;
+    margin-bottom: 20px;
+}
+
+.mini-card h3 {
+    font-size: 20px;
+    margin-bottom: 16px;
+}
+
+.mini-card p {
+    font-size: 15px;
     color: var(--text-sub);
 }
 
