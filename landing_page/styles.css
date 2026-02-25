@@ -369,9 +369,36 @@ footer p {
 
     .feature-grid-mini {
         grid-template-columns: 1fr;
+        gap: 16px;
+        margin-top: 40px;
     }
 
     .mini-card {
-        padding: 30px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        text-align: left;
+        gap: 20px;
+    }
+
+    .mini-card:hover {
+        transform: none;
+    }
+
+    .mini-card .icon {
+        font-size: 28px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+        width: 40px;
+        text-align: center;
+    }
+
+    .mini-card h3 {
+        font-size: 18px;
+        margin-bottom: 4px;
+    }
+
+    .mini-card p {
+        font-size: 14px;
     }
 }
