@@ -1,16 +1,31 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// --- RENDER DEPLOYMENT URL ---
-// デプロイ後、Renderから発行されたURLをここに貼り付けてください
-// const RENDER_URL = 'https://fitness-backend-xqha.onrender.com/api';
-// Force local dev for now
-const RENDER_URL = 'http://192.168.2.103:3000/api';
+// --- PRODUCTION BACKEND URL ---
+// Replace with your actual production backend URL (e.g., https://your-backend.onrender.com/api)
+const PRODUCTION_URL = 'https://fitness-app-ai-backend.onrender.com/api';
 
-// Use Render URL if configured, otherwise fallback to local dev URLs
-const API_URL = RENDER_URL.includes('xxxx')
-    ? (Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api')
-    : RENDER_URL;
+const getBaseUrl = () => {
+    // In development mode, always use the local server
+    if (__DEV__) {
+        if (Platform.OS === 'android') {
+            return 'http://10.0.2.2:3000/api/';
+        }
+        return 'http://localhost:3000/api/';
+    }
+
+    // Production logic
+    // If the URL is still a placeholder or known non-functional URL, fallback to a safe state or alert the developer
+    let url = PRODUCTION_URL;
+    if (!url || url.includes('onrender.com') && url.includes('fitness-app-ai-backend')) {
+        // WARNING: This URL is currently 404. Ensure it is updated before final submission.
+        console.warn('Production Backend URL is not configured. Please update in foodApiService.ts');
+    }
+
+    return url.endsWith('/') ? url : `${url}/`;
+};
+
+const API_URL = getBaseUrl();
 
 const api = axios.create({
     baseURL: API_URL,
@@ -21,7 +36,7 @@ const api = axios.create({
 
 export const scanFood = async (barcode: string) => {
     try {
-        const response = await api.get(`/food/scan/${barcode}`);
+        const response = await api.get(`food/scan/${barcode}`);
         return response.data;
     } catch (error) {
         console.error('Scan Error:', error);
@@ -29,14 +44,22 @@ export const scanFood = async (barcode: string) => {
     }
 };
 
-export const logMeal = async (userId: string, barcode: string, quantity: number, mealType: string, date?: string) => {
+export const logMeal = async (
+    userId: string,
+    barcode: string,
+    quantity: number,
+    mealType: string,
+    date?: string,
+    name?: string,
+    calories?: number,
+    protein?: number,
+    fat?: number,
+    carbs?: number
+) => {
     try {
-        const response = await api.post('/logs/meal', {
-            userId,
-            barcode,
-            quantity,
-            mealType,
-            date
+        const response = await api.post('logs/meal', {
+            userId, barcode, quantity, mealType, date,
+            name, calories, protein, fat, carbs
         });
         return response.data;
     } catch (error) {
@@ -45,9 +68,10 @@ export const logMeal = async (userId: string, barcode: string, quantity: number,
     }
 };
 
-export const getDailyLogs = async (userId: string) => {
+export const getDailyLogs = async (userId: string, date?: string) => {
     try {
-        const response = await api.get(`logs/${userId}/today`);
+        const endpoint = date ? `logs/${userId}/date/${date}` : `logs/${userId}/today`;
+        const response = await api.get(endpoint);
         return response.data;
     } catch (error) {
         console.error('Get Daily Logs Error:', error);
@@ -57,7 +81,7 @@ export const getDailyLogs = async (userId: string) => {
 
 export const searchFood = async (query: string) => {
     try {
-        const response = await api.get('/food/search', {
+        const response = await api.get('food/search', {
             params: { query }
         });
         return response.data;
@@ -67,9 +91,18 @@ export const searchFood = async (query: string) => {
     }
 };
 
-export const analyzeMeal = async (base64Image: string) => {
+export interface MealAnalysisResult {
+    food_name: string;
+    calories: number | string;
+    protein: number | string;
+    fat: number | string;
+    carbs: number | string;
+    confidence?: number;
+}
+
+export const analyzeMeal = async (base64Image: string): Promise<MealAnalysisResult> => {
     try {
-        const response = await api.post('/analyze-meal', {
+        const response = await api.post('ai/analyze-meal', {
             image: base64Image
         });
         return response.data.analysis;
@@ -79,9 +112,9 @@ export const analyzeMeal = async (base64Image: string) => {
     }
 };
 
-export const analyzeLabel = async (base64Image: string) => {
+export const analyzeLabel = async (base64Image: string): Promise<MealAnalysisResult> => {
     try {
-        const response = await api.post('/analyze-label', {
+        const response = await api.post('ai/analyze-label', {
             image: base64Image
         });
         return response.data.analysis;
@@ -100,7 +133,7 @@ export const createProduct = async (productData: {
     carbs: number;
 }) => {
     try {
-        const response = await api.post('/food/create', productData);
+        const response = await api.post('food/create', productData);
         return response.data;
     } catch (error) {
         console.error('Create Product Error:', error);
@@ -111,7 +144,7 @@ export const createProduct = async (productData: {
 
 export const getFoodHistory = async (userId: string) => {
     try {
-        const response = await api.get(`/food/logs/${userId}/history`);
+        const response = await api.get(`food/logs/${userId}/history`);
         return response.data.history;
     } catch (error) {
         console.error('Get Food History Error:', error);
@@ -121,10 +154,33 @@ export const getFoodHistory = async (userId: string) => {
 
 export const deleteFoodHistory = async (userId: string, barcode: string) => {
     try {
-        const response = await api.delete(`/logs/history/${userId}/${barcode}`);
+        const response = await api.delete(`logs/history/${userId}/${barcode}`);
         return response.data;
     } catch (error) {
         console.error('Delete Food History Error:', error);
+        throw error;
+    }
+};
+
+export const getAdvice = async (userId: string, date?: string) => {
+    try {
+        const url = `ai/advice/${userId}${date ? `?date=${date}` : ''}`;
+        const response = await api.get(url);
+        return response.data;
+    } catch (error) {
+        console.error('Get Advice Error:', error);
+        throw error;
+    }
+};
+
+export const deleteMealLog = async (userId: string, date: string, mealId: string | number) => {
+    try {
+        const response = await api.delete('logs/meal', {
+            data: { userId, date, mealId }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Delete Meal Log Error:', error);
         throw error;
     }
 };

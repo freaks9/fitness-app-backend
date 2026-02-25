@@ -2,44 +2,15 @@ import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
-import { analyzeLabel, analyzeMeal } from '../services/foodApiService';
+import { MealAnalysisResult, analyzeLabel, analyzeMeal } from '../services/foodApiService';
 
 export const useMealAnalysis = () => {
     const { t } = useLanguageContext();
     const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<any | null>(null);
-
-    const resizeImage = async (base64Image: string): Promise<string> => {
-        try {
-            // Create a temporary URI from base64 (this part assumes we have the URI, but we only have base64 here)
-            // Wait, we need the URI for manipulateAsync.
-            // Let's check how analyzeImage is called. It's called with base64 in ScannerScreen.
-            // ScannerScreen gets base64 from takePictureAsync.
-            // We should modify takePictureAsync in ScannerScreen to just return URI, or handle it here if we can.
-            // Actually, manipulating base64 directly is tricky without writing to file.
-            // Ideally, we should receive the URI in this hook, resize it, and THEN get base64.
-
-            // However, to keep changes minimal, let's look at ScannerScreen.
-            // ScannerScreen calls: const analysis = await analyzeImage(photo.base64);
-            // Better to change ScannerScreen to pass URI and let this hook handle the rest?
-            // Or change ScannerScreen to do the manipulation.
-
-            // Let's implement a helper here that takes a URI, but the current function signature takes base64.
-            // If we receive base64, we can't easily use expo-image-manipulator without saving it first.
-            // Strategy change: We will rely on ScannerScreen to pass the URI.
-            // But wait, analyzeImage argument is `base64Image`.
-
-            // Let's update `analyzeImage` to accept `imageUri` as well, or just `imageUri`.
-            // If we change the signature, we need to update ScannerScreen.
-            return base64Image;
-        } catch (error) {
-            console.error("Resize error", error);
-            return base64Image;
-        }
-    };
+    const [result, setResult] = useState<MealAnalysisResult | null>(null);
 
     // We need to change the interface to accept URI for better performance and manipulation support.
-    const analyzeImage = async (imageUri: string, isBase64 = false) => {
+    const analyzeImage = async (imageUri: string, isBase64 = false): Promise<MealAnalysisResult | null> => {
         setLoading(true);
         setResult(null);
         try {
@@ -76,7 +47,7 @@ export const useMealAnalysis = () => {
         }
     };
 
-    const analyzeLabelImage = async (imageUri: string, isBase64 = false) => {
+    const analyzeLabelImage = async (imageUri: string, isBase64 = false): Promise<MealAnalysisResult | null> => {
         setLoading(true);
         setResult(null);
         try {
@@ -94,9 +65,9 @@ export const useMealAnalysis = () => {
             const analysis = await analyzeLabel(processedBase64);
             setResult(analysis);
             return analysis;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            Alert.alert(t('error'), 'Failed to analyze label.');
+            Alert.alert(t('error'), t('failedToAnalyze'));
             return null;
         } finally {
             setLoading(false);

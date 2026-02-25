@@ -1,0 +1,60 @@
+
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function inspectDeeply() {
+    console.log('--- Deep Database Inspection ---');
+
+    // 1. Check for lab_reports with missing profiles
+    console.log('\nChecking lab_reports foreign keys:');
+    const { data: reports, error: reportsErr } = await supabase
+        .from('lab_reports')
+        .select('id, user_id, profiles(id, nickname)');
+
+    if (reportsErr) console.error('Error fetching reports:', reportsErr);
+    else {
+        reports?.forEach(r => {
+            if (!r.profiles) {
+                console.warn(`ORPHANED REPORT: id=${r.id}, user_id=${r.user_id} (No profile found)`);
+            }
+        });
+        console.log(`Checked ${reports?.length} reports.`);
+    }
+
+    // 2. Check for comments without valid users or reports
+    console.log('\nChecking lab_comments foreign keys:');
+    const { data: comments, error: commErr } = await supabase
+        .from('lab_comments')
+        .select('id, report_id, user_id, profiles(id)');
+
+    if (commErr) console.error('Error fetching comments:', commErr);
+    else {
+        comments?.forEach(c => {
+            if (!c.profiles) console.warn(`ORPHANED COMMENT (No profile): id=${c.id}, user_id=${c.user_id}`);
+        });
+        console.log(`Checked ${comments?.length} comments.`);
+    }
+
+    // 3. Check for specific malformed data (e.g. invalid method tags)
+    console.log('\nChecking for malformed method_tags:');
+    const { data: malformed, error: malErr } = await supabase
+        .from('lab_reports')
+        .select('id, method_tag')
+        .not('method_tag', 'in', '("calorie_control","keto","low_salt","protein_plus","carb_limit","other")');
+
+    if (malErr) console.error('Error checking method_tags:', malErr);
+    else {
+        if (malformed?.length === 0) console.log('All method_tags are valid.');
+        else malformed?.forEach(m => console.warn(`INVALID TAG: id=${m.id}, tag=${m.method_tag}`));
+    }
+}
+
+inspectDeeply();

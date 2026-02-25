@@ -17,7 +17,11 @@ import {
 import { AILoadingScreen } from '../components/AILoadingScreen';
 import { useAuth } from '../context/AuthContext';
 import { useLanguageContext } from '../context/LanguageContext';
+import { useUser } from '../context/UserContext';
+import { useInterstitialAd } from '../hooks/useInterstitialAd';
 import { useMealAnalysis } from '../hooks/useMealAnalysis';
+import { useRewardedAd } from '../hooks/useRewardedAd';
+import { UsageLimitService } from '../services/UsageLimitService';
 import { logMeal, scanFood } from '../services/foodApiService';
 
 const ScannerScreen = ({ navigation, route }: any) => {
@@ -35,6 +39,9 @@ const ScannerScreen = ({ navigation, route }: any) => {
 
     const cameraRef = useRef<CameraView>(null);
     const { analyzeImage, loading: aiLoading } = useMealAnalysis();
+    const { showAdIfReady } = useInterstitialAd();
+    const { showRewardedAd, loaded: rewardLoaded } = useRewardedAd();
+    const { profile } = useUser();
 
     if (!permission) {
         return <View />;
@@ -57,8 +64,23 @@ const ScannerScreen = ({ navigation, route }: any) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         try {
+            const dateStr = date || new Date().toISOString().split('T')[0];
+            const isToday = dateStr === new Date().toISOString().split('T')[0];
+
+            if (isToday) {
+                const canUse = await UsageLimitService.canUseAI(profile.isPremium || false);
+                if (!canUse) {
+                    showLimitAlert();
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const result = await scanFood(data);
             if (result && result.product) {
+                if (isToday) {
+                    await UsageLimitService.incrementUsage();
+                }
                 const p = result.product;
                 const hasNutrition = (p.calories > 0 || p.protein > 0 || p.fat > 0 || p.carbs > 0);
 
@@ -86,23 +108,25 @@ const ScannerScreen = ({ navigation, route }: any) => {
                         ]
                     );
                 } else {
-                    // Auto-navigate to MealEntry screen
-                    setScanned(false); // Reset scanned state so we can scan again later if needed
-                    navigation.navigate('MealEntry', {
-                        prefilledName: p.name,
-                        prefilledCalories: p.calories,
-                        prefilledProtein: p.protein,
-                        prefilledFat: p.fat,
-                        prefilledCarbs: p.carbs,
-                        date,
-                        mealType,
-                        scannedBarcode: data // Pass barcode to allow saving/updating
+                    setScanned(false);
+                    showAdIfReady(() => {
+                        navigation.navigate('MealEntry', {
+                            prefilledName: p.name,
+                            prefilledCalories: p.calories,
+                            prefilledProtein: p.protein,
+                            prefilledFat: p.fat,
+                            prefilledCarbs: p.carbs,
+                            date,
+                            mealType,
+                            scannedBarcode: data
+                        });
                     });
                 }
             } else {
                 throw new Error("Product not found");
             }
-        } catch {
+        } catch (error) {
+            console.error(error);
             Alert.alert(
                 t('productNotFound') || "Product Not Found",
                 t('scanLabelPrompt') || "Would you like to scan the nutrition label to add this product to the database?",
@@ -115,14 +139,15 @@ const ScannerScreen = ({ navigation, route }: any) => {
                             navigation.navigate('LabelScanner', {
                                 date,
                                 mealType,
-                                scannedBarcode: data // Pass the barcode to link with the new product
+                                scannedBarcode: data
                             });
                         }
                     }
                 ]
             );
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleAddFood = async () => {
@@ -153,7 +178,7 @@ const ScannerScreen = ({ navigation, route }: any) => {
             await AsyncStorage.setItem(`meals_${date}`, JSON.stringify(meals));
 
             setModalVisible(false);
-            navigation.navigate('Dashboard');
+            navigation.navigate('Main');
         } catch (error) {
             console.error('Failed to save meal', error);
             Alert.alert(t('error'), 'Failed to save meal.');
@@ -166,7 +191,56 @@ const ScannerScreen = ({ navigation, route }: any) => {
         setScannedProduct(null);
     };
 
+    const showLimitAlert = async () => {
+        const adWatchCount = await UsageLimitService.getAdWatchCount();
+        const canWatchAd = await UsageLimitService.canWatchAd();
+
+        if (canWatchAd) {
+            Alert.alert(
+                t('limitReachedTitle') || '無料枠の制限',
+                (t('limitReachedMsg') || '本日の無料解析枠（3回）を使い切りました。プレミアムプランに加入するか、動画広告を見てあと1回分を無料で開放しますか？\n（現在：{{count}}/3回の動画視聴済み）').replace('{{count}}', adWatchCount.toString()),
+                [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                        text: t('watchAd') || '動画を見て開放',
+                        onPress: () => {
+                            const success = showRewardedAd(async () => {
+                                await UsageLimitService.grantReward();
+                                Alert.alert(t('success'), t('rewardGranted') || '解析枠が1回分開放されました！');
+                            });
+                            if (!success) {
+                                Alert.alert(t('error'), t('adNotReady') || '動画の準備ができていません。しばらく待ってから再度お試しください。');
+                            }
+                        }
+                    },
+                    {
+                        text: t('upgradeToPremium') || 'プレミアムプランへ',
+                        onPress: () => navigation.navigate('Settings')
+                    }
+                ]
+            );
+        } else {
+            Alert.alert(
+                t('limitReachedTitle') || '無料枠の制限',
+                t('allLimitsReachedMsg') || '本日の全ての無料枠を使い切りました。制限なしで利用するにはプレミアムプランへ加入してください。',
+                [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                        text: t('upgradeToPremium') || 'プレミアムプランへ',
+                        onPress: () => navigation.navigate('Settings')
+                    }
+                ]
+            );
+        }
+    };
+
     const pickImage = async () => {
+        const canUse = await UsageLimitService.canUseAI(profile.isPremium || false);
+        if (!canUse) {
+            showLimitAlert();
+            return;
+        }
+
         try {
             console.log("Starting pickImage...");
             const result = await ImagePicker.launchImageLibraryAsync({
@@ -182,18 +256,23 @@ const ScannerScreen = ({ navigation, route }: any) => {
                 const uri = result.assets[0].uri;
                 console.log("Selected Image URI:", uri);
                 const analysis = await analyzeImage(uri);
+                if (analysis) {
+                    await UsageLimitService.incrementUsage();
+                }
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
                 if (analysis) {
-                    navigation.navigate('MealEntry', {
-                        prefilledName: analysis.food_name,
-                        prefilledCalories: analysis.calories,
-                        prefilledProtein: analysis.protein,
-                        prefilledFat: analysis.fat,
-                        prefilledCarbs: analysis.carbs,
-                        imageUri: uri,
-                        date,
-                        mealType,
+                    showAdIfReady(() => {
+                        navigation.navigate('MealEntry', {
+                            prefilledName: analysis.food_name,
+                            prefilledCalories: analysis.calories,
+                            prefilledProtein: analysis.protein,
+                            prefilledFat: analysis.fat,
+                            prefilledCarbs: analysis.carbs,
+                            imageUri: uri,
+                            date,
+                            mealType,
+                        });
                     });
                 }
             }
@@ -204,20 +283,31 @@ const ScannerScreen = ({ navigation, route }: any) => {
     };
 
     const takePicture = async () => {
-        if (cameraRef.current) {
-            try {
-                const photo = await cameraRef.current.takePictureAsync({
-                    base64: false, // No need for base64 from camera anymore
-                    quality: 0.8,
-                });
+        if (!cameraRef.current) return;
 
-                if (photo && photo.uri) {
-                    // Pass URI to analyzeImage, which now handles resizing and base64 conversion
-                    const analysis = await analyzeImage(photo.uri);
+        const canUse = await UsageLimitService.canUseAI(profile.isPremium || false);
+        if (!canUse) {
+            showLimitAlert();
+            return;
+        }
 
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                base64: false, // No need for base64 from camera anymore
+                quality: 0.8,
+            });
 
-                    if (analysis) {
+            if (photo && photo.uri) {
+                // Pass URI to analyzeImage, which now handles resizing and base64 conversion
+                const analysis = await analyzeImage(photo.uri);
+                if (analysis) {
+                    await UsageLimitService.incrementUsage();
+                }
+
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                if (analysis) {
+                    showAdIfReady(() => {
                         navigation.navigate('MealEntry', {
                             prefilledName: analysis.food_name,
                             prefilledCalories: analysis.calories,
@@ -228,12 +318,12 @@ const ScannerScreen = ({ navigation, route }: any) => {
                             date,
                             mealType,
                         });
-                    }
+                    });
                 }
-            } catch (error) {
-                console.error("Failed to take picture", error);
-                Alert.alert(t('error'), t('failedToTakePicture') || "Failed to take picture.");
             }
+        } catch (error) {
+            console.error("Failed to take picture", error);
+            Alert.alert(t('error'), t('failedToTakePicture') || "Failed to take picture.");
         }
     };
 
@@ -268,24 +358,24 @@ const ScannerScreen = ({ navigation, route }: any) => {
                                 style={[styles.modeButton, mode === 'barcode' && styles.modeButtonActive]}
                                 onPress={() => setMode('barcode')}
                             >
-                                <Text style={[styles.modeText, mode === 'barcode' && styles.modeTextActive]}>Barcode</Text>
+                                <Text style={[styles.modeText, mode === 'barcode' && styles.modeTextActive]}>バーコード</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.modeButton, mode === 'ai' && styles.modeButtonActive]}
                                 onPress={() => setMode('ai')}
                             >
-                                <Text style={[styles.modeText, mode === 'ai' && styles.modeTextActive]}>{t('aiScan')}</Text>
+                                <Text style={[styles.modeText, mode === 'ai' && styles.modeTextActive]}>{t('aiScan') || 'AIスキャン'}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.modeButton]}
                                 onPress={() => navigation.navigate('LabelScanner', { date, mealType })}
                             >
-                                <Text style={[styles.modeText]}>{t('labelScan')}</Text>
+                                <Text style={[styles.modeText]}>{t('labelScan') || 'ラベル読み取り'}</Text>
                             </TouchableOpacity>
                         </View>
 
                         <Text style={styles.instructionText}>
-                            {mode === 'barcode' ? "Scan barcode to add food" : "Take a photo of your meal"}
+                            {mode === 'barcode' ? "バーコードをスキャンして食品を追加" : "料理全体が写るように撮影してください"}
                         </Text>
 
                         {mode === 'ai' && (
@@ -347,7 +437,7 @@ const ScannerScreen = ({ navigation, route }: any) => {
                     </View>
                 </View>
             </Modal>
-        </View >
+        </View>
     );
 };
 

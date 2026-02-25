@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../lib/supabase';
 
 type AuthContextType = {
     session: Session | null;
@@ -44,6 +44,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         });
 
+        // Auto-fix for existing guests who don't have a Supabase session
+        AsyncStorage.getItem('isGuest').then(isGuestFlag => {
+            if (isGuestFlag === 'true') {
+                supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+                    if (!currentSession) {
+                        supabase.auth.signInAnonymously().then(({ data: { session: newSession } }) => {
+                            if (newSession) {
+                                setSession(newSession);
+                                setUser(newSession.user);
+                                setIsGuest(true);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
         return () => subscription.unsubscribe();
     }, []);
 
@@ -56,8 +73,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const enterGuestMode = async () => {
-        await AsyncStorage.setItem('isGuest', 'true');
-        setIsGuest(true);
+        try {
+            const { data, error } = await supabase.auth.signInAnonymously();
+            if (error) throw error;
+            await AsyncStorage.setItem('isGuest', 'true');
+            setIsGuest(true);
+            setSession(data.session);
+            setUser(data.session?.user ?? null);
+        } catch (error: any) {
+            console.error('Error entering guest mode:', error.message);
+            // Fallback to local flag if sign-in fails
+            await AsyncStorage.setItem('isGuest', 'true');
+            setIsGuest(true);
+        }
     };
 
     const logout = async () => {

@@ -6,7 +6,11 @@ import React, { useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AILoadingScreen } from '../components/AILoadingScreen';
 import { useLanguageContext } from '../context/LanguageContext';
+import { useUser } from '../context/UserContext';
+import { useInterstitialAd } from '../hooks/useInterstitialAd';
 import { useMealAnalysis } from '../hooks/useMealAnalysis';
+import { useRewardedAd } from '../hooks/useRewardedAd';
+import { UsageLimitService } from '../services/UsageLimitService';
 
 const LabelScannerScreen = ({ navigation }: any) => {
     const isFocused = useIsFocused();
@@ -15,6 +19,52 @@ const LabelScannerScreen = ({ navigation }: any) => {
     const cameraRef = useRef<any>(null);
     const { analyzeLabelImage, loading } = useMealAnalysis();
     const [isScanning, setIsScanning] = useState(false);
+    const { showAdIfReady } = useInterstitialAd();
+    const { showRewardedAd } = useRewardedAd();
+    const { profile } = useUser();
+
+    const showLimitAlert = async () => {
+        const adWatchCount = await UsageLimitService.getAdWatchCount();
+        const canWatchAd = await UsageLimitService.canWatchAd();
+
+        if (canWatchAd) {
+            Alert.alert(
+                t('limitReachedTitle') || '無料枠の制限',
+                (t('limitReachedMsg') || '本日の無料解析枠（3回）を使い切りました。プレミアムプランに加入するか、動画広告を見てあと1回分を無料で開放しますか？\n（現在：{{count}}/3回の動画視聴済み）').replace('{{count}}', adWatchCount.toString()),
+                [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                        text: t('watchAd') || '動画を見て開放',
+                        onPress: () => {
+                            const success = showRewardedAd(async () => {
+                                await UsageLimitService.grantReward();
+                                Alert.alert(t('success'), t('rewardGranted') || '解析枠が1回分開放されました！');
+                            });
+                            if (!success) {
+                                Alert.alert(t('error'), t('adNotReady') || '動画の準備ができていません。しばらく待ってから再度お試しください。');
+                            }
+                        }
+                    },
+                    {
+                        text: t('upgradeToPremium') || 'プレミアムプランへ',
+                        onPress: () => navigation.navigate('Settings')
+                    }
+                ]
+            );
+        } else {
+            Alert.alert(
+                t('limitReachedTitle') || '無料枠の制限',
+                t('allLimitsReachedMsg') || '本日の全ての無料枠を使い切りました。制限なしで利用するにはプレミアムプランへ加入してください。',
+                [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                        text: t('upgradeToPremium') || 'プレミアムプランへ',
+                        onPress: () => navigation.navigate('Settings')
+                    }
+                ]
+            );
+        }
+    };
 
     if (!permission) {
         return <View />;
@@ -41,18 +91,28 @@ const LabelScannerScreen = ({ navigation }: any) => {
                 });
 
                 if (photo.uri) {
+                    const canUse = await UsageLimitService.canUseAI(profile.isPremium || false);
+                    if (!canUse) {
+                        showLimitAlert();
+                        setIsScanning(false);
+                        return;
+                    }
+
                     // Pass URI to analyzeLabelImage
                     const analysis = await analyzeLabelImage(photo.uri);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     if (analysis) {
-                        navigation.navigate('MealEntry', {
-                            prefilledName: analysis.food_name || '',
-                            prefilledCalories: analysis.calories || '',
-                            prefilledProtein: analysis.protein || '',
-                            prefilledFat: analysis.fat || '',
-                            prefilledCarbs: analysis.carbs || '',
-                            imageUri: photo.uri,
-                            scannedBarcode: (navigation.getState().routes.find((r: any) => r.name === 'LabelScanner')?.params as any)?.scannedBarcode
+                        await UsageLimitService.incrementUsage();
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        showAdIfReady(() => {
+                            navigation.navigate('MealEntry', {
+                                prefilledName: analysis.food_name || '',
+                                prefilledCalories: analysis.calories || '',
+                                prefilledProtein: analysis.protein || '',
+                                prefilledFat: analysis.fat || '',
+                                prefilledCarbs: analysis.carbs || '',
+                                imageUri: photo.uri,
+                                scannedBarcode: (navigation.getState().routes.find((r: any) => r.name === 'LabelScanner')?.params as any)?.scannedBarcode
+                            });
                         });
                     }
                 }

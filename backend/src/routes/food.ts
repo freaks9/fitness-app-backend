@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import * as wanakana from 'wanakana';
 import { prisma } from '../db';
 import * as fatSecret from '../services/fatSecret';
 import { fetchProductFromOpenFoodFacts, searchProductsFromOpenFoodFacts } from '../services/openFoodFacts';
@@ -58,12 +59,11 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
         try {
             // 1. Search Local DB with Fuzzy Vowels
-            const wanakana = require('wanakana');
+            // wanakana is imported at top
 
             // Helper to generate vowel permutations (ramen -> raamen, rameen, raameen)
             const permuteVowels = (str: string): string[] => {
-                const vowels = ['a', 'e', 'i', 'o', 'u'];
-                let results = [str];
+                // vowels and results were unused
 
                 // Simple approach: Double each vowel occurrence one by one
                 // For "ramen", indices of 'a' is 1, 'e' is 3.

@@ -62,47 +62,36 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const calculateBackoff = (attempt: number) => 2000 * Math.pow(2, attempt);
 
-// Helper function to handle generation with fallback and retries
-const generateWithFallback = async (systemPrompt: string, imagePart: any): Promise<string> => {
-    // gemini-2.0-flash and others often hit 429 or 404 for images.
-    // gemini-flash-lite-latest verified as the most stable vision model for this key.
-    const models = ["gemini-flash-lite-latest", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
-    let lastError: any = null;
+// Helper function to handle generation with single stable model
+const generateWithStableModel = async (systemPrompt: string, imagePart: any): Promise<string> => {
+    const modelName = "gemini-flash-lite-latest";
+    let attempt = 0;
+    const maxRetries = 3;
 
-    for (const modelName of models) {
-        let attempt = 0;
-        const maxRetriesPerModel = 2; // Try each model twice
+    while (attempt < maxRetries) {
+        try {
+            console.log(`[AI] Attempting with model: ${modelName} (Try ${attempt + 1})`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent([systemPrompt, imagePart]);
+            const response = await result.response;
+            return response.text();
 
-        while (attempt < maxRetriesPerModel) {
-            try {
-                console.log(`[AI] Attempting with model: ${modelName} (Try ${attempt + 1})`);
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent([systemPrompt, imagePart]);
-                const response = await result.response;
-                return response.text();
+        } catch (error: any) {
+            console.warn(`[AI] Error with ${modelName}:`, error.message);
 
-            } catch (error: any) {
-                console.warn(`[AI] Error with ${modelName}:`, error.message);
-                lastError = error;
-
-                if (error.message.includes('429') || error.message.includes('Too Many Requests') || error.message.includes('503')) {
-                    attempt++;
-                    if (attempt < maxRetriesPerModel) {
-                        const waitTime = calculateBackoff(attempt);
-                        console.log(`[AI] Waiting ${waitTime}ms before retry...`);
-                        await delay(waitTime);
-                        continue;
-                    }
-                } else {
-                    // If it's not a temporary error (e.g., 400 Bad Request), don't retry this model
-                    break;
+            if (error.message.includes('429') || error.message.includes('Too Many Requests') || error.message.includes('503')) {
+                attempt++;
+                if (attempt < maxRetries) {
+                    const waitTime = calculateBackoff(attempt);
+                    console.log(`[AI] Waiting ${waitTime}ms before retry...`);
+                    await delay(waitTime);
+                    continue;
                 }
             }
-            attempt++;
+            throw error;
         }
-        console.log(`[AI] Switching to next fallback model...`);
     }
-    throw lastError || new Error("All AI models failed.");
+    throw new Error(`Failed to generate content with ${modelName} after ${maxRetries} attempts.`);
 };
 
 export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysisResult | null> => {
@@ -147,7 +136,7 @@ export const analyzeMealImage = async (base64Image: string): Promise<MealAnalysi
         // ----------------------------
 
 
-        const text = await generateWithFallback(SYSTEM_PROMPT, imagePart);
+        const text = await generateWithStableModel(SYSTEM_PROMPT, imagePart);
 
         console.log("--- Raw Gemini Response ---");
         console.log(text);
@@ -214,14 +203,21 @@ export const analyzeLabelImage = async (base64Image: string): Promise<Partial<Me
     }
 
     try {
+        // Consistent base64 cleaning for labels too
+        let cleanBase64 = base64Image;
+        if (base64Image && base64Image.includes('base64,')) {
+            console.log("[AI-Label] Stripping data URI prefix...");
+            cleanBase64 = base64Image.split('base64,')[1];
+        }
+
         const imagePart = {
             inlineData: {
-                data: base64Image,
+                data: cleanBase64,
                 mimeType: "image/jpeg",
             },
         };
 
-        const text = await generateWithFallback(LABEL_SYSTEM_PROMPT, imagePart);
+        const text = await generateWithStableModel(LABEL_SYSTEM_PROMPT, imagePart);
 
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const jsonMatch = cleanText.match(/\{[\s\S]*\}/);

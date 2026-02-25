@@ -104,7 +104,8 @@ const ExerciseEntryScreen = ({ navigation, route }: any) => {
         };
 
         await saveExerciseLog(newLog);
-        Alert.alert(t('success'), `${calories} kcal burned!`);
+        const msg = t('burnedKcal') ? t('burnedKcal').replace('{{calories}}', String(calories)) : `${calories} kcal burned!`;
+        Alert.alert(t('success') || 'Success', msg);
         navigation.goBack();
     };
 
@@ -228,7 +229,7 @@ const ExerciseEntryScreen = ({ navigation, route }: any) => {
 
                     {apiResults.length > 0 && (
                         <View style={styles.apiResultsContainer}>
-                            <Text style={styles.sectionHeader}>Online Results:</Text>
+                            <Text style={styles.sectionHeader}>{t('onlineResults') || 'Online Results:'}</Text>
                             {apiResults.map((item, idx) => (
                                 <TouchableOpacity
                                     key={idx}
@@ -242,7 +243,7 @@ const ExerciseEntryScreen = ({ navigation, route }: any) => {
                         </View>
                     )}
 
-                    <Text style={styles.sectionHeader}>Local Database:</Text>
+                    <Text style={styles.sectionHeader}>{t('localDatabase') || 'Local Database:'}</Text>
                     <FlatList
                         data={searchResults}
                         keyExtractor={item => item.id}

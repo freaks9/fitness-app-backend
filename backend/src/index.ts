@@ -23,7 +23,7 @@ fastify.register(cors, {
 
 fastify.register(foodRoutes, { prefix: '/api/food' });
 fastify.register(logRoutes, { prefix: '/api/logs' });
-fastify.register(aiRoutes, { prefix: '/api' });
+fastify.register(aiRoutes, { prefix: '/api/ai' });
 
 fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);

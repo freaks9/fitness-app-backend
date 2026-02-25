@@ -1,8 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguageContext } from '../context/LanguageContext';
+import { useUser } from '../context/UserContext';
 
 // Using a custom Picker component or basic buttons to avoid extra dependency if possible, 
 // but @react-native-picker/picker is standard in Expo. I should have installed it. 
@@ -13,6 +15,7 @@ import { useLanguageContext } from '../context/LanguageContext';
 
 const SettingsScreen = ({ navigation }: any) => {
     const { language, setLanguage, t } = useLanguageContext();
+    const { profile } = useUser();
     const { logout } = useAuth();
     const [weight, setWeight] = useState('');
     const [height, setHeight] = useState('');
@@ -134,6 +137,24 @@ const SettingsScreen = ({ navigation }: any) => {
     return (
         <ScrollView contentContainerStyle={styles.container}>
             <Text style={styles.title}>{t('userSettings')}</Text>
+
+            {/* Rank Badge */}
+            <View style={styles.rankContainer}>
+                <Ionicons name="medal" size={40} color={profile.streakCount && profile.streakCount >= 30 ? '#FFD700' : profile.streakCount && profile.streakCount >= 7 ? '#C0C0C0' : '#CD7F32'} />
+                <View style={styles.rankInfo}>
+                    <Text style={styles.rankLabel}>現在のランク</Text>
+                    <Text style={styles.rankValue}>{profile.rank || '見習い研究員'}</Text>
+                    <Text style={styles.streakText}>{profile.streakCount || 0} 日連続継続中</Text>
+                </View>
+            </View>
+
+            <TouchableOpacity
+                style={styles.premiumButton}
+                onPress={() => navigation.navigate('Premium')}
+            >
+                <Text style={styles.premiumButtonText}>プレミアムプランについて</Text>
+                <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </TouchableOpacity>
 
             <Text style={styles.label}>{t('language')}</Text>
             <View style={styles.row}>
@@ -282,6 +303,48 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         color: '#007AFF',
+    },
+    rankContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 20,
+        borderRadius: 20,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    rankInfo: {
+        marginLeft: 15,
+    },
+    rankLabel: {
+        fontSize: 12,
+        color: '#64748B',
+    },
+    rankValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1E88E5',
+    },
+    streakText: {
+        fontSize: 14,
+        color: '#34C759',
+        fontWeight: '600',
+    },
+    premiumButton: {
+        backgroundColor: '#1E88E5',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 15,
+        borderRadius: 15,
+        marginBottom: 30,
+    },
+    premiumButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginRight: 10,
     },
 });
 

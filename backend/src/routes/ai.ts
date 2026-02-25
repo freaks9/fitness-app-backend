@@ -56,9 +56,33 @@ export default async function aiRoutes(fastify: FastifyInstance) {
             } else {
                 return reply.code(500).send({ error: 'Failed to analyze label image' });
             }
-        } catch (error) {
-            fastify.log.error('AI Label Analysis Route Error:', error as any);
-            return reply.code(500).send({ error: 'Internal Server Error', message: (error as any).message });
+        } catch (error: any) {
+            fastify.log.error('AI Label Analysis Route Error:', error);
+            const msg = error.message || '';
+            if (msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('Overloaded')) {
+                return reply.code(503).send({ error: 'AI Service Temporarily Unavailable', message: 'The AI service is currently experiencing high traffic. Please try again in a few minutes.' });
+            }
+            return reply.code(500).send({ error: 'Internal Server Error', message: msg });
+        }
+    });
+
+    fastify.get('/advice/:userId', async (request, reply) => {
+        const { userId } = request.params as { userId: string };
+        const { date } = request.query as { date?: string };
+
+        fastify.log.info(`--- Received /advice request for user: ${userId}, date: ${date} ---`);
+
+        try {
+            const { generateDailyAdvice } = await import('../services/aiAdvisor');
+            const advice = await generateDailyAdvice(userId, date);
+            return { advice };
+        } catch (error: any) {
+            fastify.log.error('AI Advice Route Error:', error);
+            const msg = error.message || '';
+            if (msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('Overloaded')) {
+                return reply.code(503).send({ error: 'AI Service Temporarily Unavailable', message: 'The AI service is currently experiencing high traffic. Please try again in a few minutes.' });
+            }
+            return reply.code(500).send({ error: 'Internal Server Error', message: msg });
         }
     });
 }

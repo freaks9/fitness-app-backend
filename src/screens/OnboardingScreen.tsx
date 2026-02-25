@@ -1,11 +1,15 @@
+
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
     Alert,
-    Animated,
     KeyboardAvoidingView,
     Platform,
+    SafeAreaView,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -15,394 +19,459 @@ import {
 import { useLanguageContext } from '../context/LanguageContext';
 import { calculateGoals } from '../services/calculator';
 
+// width not used
+
+// Design System Constants
+const COLORS = {
+    background: '#F8FAFC',
+    primary: '#1E88E5',
+    text: '#0F172A',
+    textSecondary: '#64748B',
+    white: '#FFFFFF',
+    border: '#E2E8F0',
+    error: '#EF4444',
+};
+
 const OnboardingScreen = ({ navigation }: any) => {
-    const { t, setLanguage, language } = useLanguageContext();
-    const [step, setStep] = useState(0);
-
-    // Animation State
-    const scaleAnim = React.useRef(new Animated.Value(1)).current;
-
-    React.useEffect(() => {
-        const breathingAnimation = Animated.loop(
-            Animated.sequence([
-                Animated.timing(scaleAnim, {
-                    toValue: 1.05,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(scaleAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        );
-        breathingAnimation.start();
-
-        return () => breathingAnimation.stop();
-    }, [scaleAnim]);
-
-    // Form State
-    const [weight, setWeight] = useState('');
+    const { t } = useLanguageContext();
+    const [nickname, setNickname] = useState('');
+    const [gender, setGender] = useState<'male' | 'female' | 'other' | null>(null);
+    const [birthYear, setBirthYear] = useState('');
+    const [birthMonth, setBirthMonth] = useState('');
+    const [birthDay, setBirthDay] = useState('');
     const [height, setHeight] = useState('');
-    const [age, setAge] = useState('');
-    const [gender, setGender] = useState<'male' | 'female'>('male');
-    const [activityLevel, setActivityLevel] = useState('1.2');
+    const [weight, setWeight] = useState('');
     const [targetWeight, setTargetWeight] = useState('');
+    const [activityLevel, setActivityLevel] = useState<'1.2' | '1.375' | '1.55' | '1.725'>('1.2');
 
-    const nextStep = () => {
-        if (step === 1) {
-            if (!gender || !age || !height || !weight) {
-                Alert.alert(t('error'), t('pleaseEnterAllFields'));
-                return;
-            }
+    const calculateAge = (year: string, month: string, day: string) => {
+        const y = parseInt(year);
+        const m = parseInt(month);
+        const d = parseInt(day);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return 30; // Default
+
+        const today = new Date();
+        const birthDate = new Date(y, m - 1, d);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
         }
-        if (step < 2) {
-            setStep(step + 1);
-        } else {
-            finishOnboarding();
-        }
+        return age;
     };
-
-    const finishOnboarding = async () => {
-        if (!targetWeight) {
-            Alert.alert(t('error'), t('pleaseEnterAllFields'));
+    const handleFinish = async () => {
+        if (!nickname || !gender || !birthYear || !birthMonth || !birthDay || !height || !weight || !targetWeight) {
+            Alert.alert(t('error') || 'Error', t('pleaseEnterAllFields') || 'Please enter all fields.');
             return;
         }
 
+        const age = calculateAge(birthYear, birthMonth, birthDay);
         const w = parseFloat(weight);
         const h = parseFloat(height);
-        const a = parseFloat(age);
         const tw = parseFloat(targetWeight);
 
-        // Validate inputs
-        if (isNaN(w) || isNaN(h) || isNaN(a) || isNaN(tw)) {
-            Alert.alert(t('error'), t('invalidInput'));
+        if (isNaN(w) || isNaN(h) || isNaN(tw)) {
+            Alert.alert(t('error') || 'Error', t('invalidInput') || 'Invalid input.');
             return;
         }
 
         const profile = {
-            gender,
-            age: a,
+            gender: gender === 'other' ? 'male' : gender as any, // fallback for calc
+            age,
             heightCm: h,
             weightKg: w,
-            activityLevel: activityLevel as any,
-            targetWeightKg: isNaN(tw) ? undefined : tw,
+            activityLevel: activityLevel,
+            targetWeightKg: tw,
         };
 
         const result = calculateGoals(profile);
 
         const settings = {
+            nickname,
+            gender,
+            birthDate: `${birthYear}-${birthMonth}-${birthDay}`,
+            age,
             weight,
             height,
-            age,
-            gender,
-            activityLevel,
             targetWeight,
+            activityLevel,
             goal: result.dailyCalorieGoal,
-            pfcGoals: result.pfcGoals, // Save PFC goals
+            pfcGoals: result.pfcGoals,
         };
 
         try {
             await AsyncStorage.setItem('userSettings', JSON.stringify(settings));
 
             // Save initial weight to history
-            if (weight) {
-                const today = new Date().toISOString().split('T')[0];
-                const initialHistory = [{ date: today, weight: parseFloat(weight) }];
-                await AsyncStorage.setItem('weight_history', JSON.stringify(initialHistory));
-            }
+            const today = new Date().toISOString().split('T')[0];
+            const initialHistory = [{ date: today, weight: w }];
+            await AsyncStorage.setItem('weight_history', JSON.stringify(initialHistory));
 
             await AsyncStorage.setItem('onboardingCompleted', 'true');
-            navigation.replace('Dashboard');
+            navigation.replace('Main');
         } catch (e) {
             console.error('Failed to save onboarding data', e);
         }
     };
 
-    const renderStep = () => {
-        switch (step) {
-            case 0: // Welcome & Language
-                return (
-                    <View style={styles.stepContainer}>
-                        <View style={styles.bubble}>
-                            <Text style={styles.bubbleText}>
-                                {language === 'en' ? "Hi! I'm your personal fitness assistant. Let's get started!" : "こんにちは！あなたのパーソナルフィットネスアシスタントです。一緒に頑張りましょう！"}
-                            </Text>
-                        </View>
-                        <Animated.Image
-                            source={require('../../assets/ai_secretary_fitness_1771204309038.png')}
-                            style={[styles.characterImage, { transform: [{ scale: scaleAnim }] }]}
-                            resizeMode="contain"
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="dark-content" />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.container}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* HeaderSection */}
+                    <View style={styles.header}>
+                        <LinearGradient
+                            colors={['#E3F2FD', '#F8FAFC']}
+                            style={styles.headerAccent}
                         />
-                        <View style={styles.formContainer}>
-                            <Text style={styles.label}>Language / 言語</Text>
-                            <View style={styles.row}>
-                                <TouchableOpacity
-                                    style={[styles.optionButton, language === 'en' && styles.selectedOption]}
-                                    onPress={() => setLanguage('en')}
-                                >
-                                    <Text style={[styles.optionText, language === 'en' && styles.selectedOptionText]}>English</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.optionButton, language === 'ja' && styles.selectedOption]}
-                                    onPress={() => setLanguage('ja')}
-                                >
-                                    <Text style={[styles.optionText, language === 'ja' && styles.selectedOptionText]}>日本語</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <TouchableOpacity style={styles.nextButton} onPress={nextStep}>
-                                <Text style={styles.nextButtonText}>{t('next')}</Text>
-                            </TouchableOpacity>
+                        <View style={styles.iconContainer}>
+                            <Ionicons name="sparkles" size={30} color={COLORS.primary} />
                         </View>
+                        <Text style={styles.title}>AIと一緒に、{"\n"}理想のカラダへ。</Text>
+                        <Text style={styles.subtitle}>まずはあなたのことを教えてください</Text>
                     </View>
-                );
-            case 1: // Basic Info
-                return (
-                    <View style={styles.stepContainer}>
-                        <View style={styles.bubble}>
-                            <Text style={styles.bubbleText}>
-                                {t('tellMeAboutYou')}
-                            </Text>
+
+                    {/* FormSection */}
+                    <View style={styles.form}>
+                        {/* Nickname */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>{t('nickname') || 'ニックネーム'}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={nickname}
+                                onChangeText={setNickname}
+                                placeholder={t('exampleName') || '例：タナカ'}
+                                placeholderTextColor="#94A3B8"
+                            />
                         </View>
-                        <Animated.Image
-                            source={require('../../assets/ai_secretary_fitness_1771204309038.png')}
-                            style={[styles.characterImageSmall, { transform: [{ scale: scaleAnim }] }]}
-                            resizeMode="contain"
-                        />
-                        <ScrollView style={styles.formContainer}>
-                            <Text style={styles.label}>{t('gender')}</Text>
-                            <View style={styles.row}>
-                                <TouchableOpacity
-                                    style={[styles.optionButton, gender === 'male' && styles.selectedOption]}
-                                    onPress={() => setGender('male')}
-                                >
-                                    <Text style={[styles.optionText, gender === 'male' && styles.selectedOptionText]}>{t('male')}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.optionButton, gender === 'female' && styles.selectedOption]}
-                                    onPress={() => setGender('female')}
-                                >
-                                    <Text style={[styles.optionText, gender === 'female' && styles.selectedOptionText]}>{t('female')}</Text>
-                                </TouchableOpacity>
-                            </View>
 
-                            <Text style={styles.label}>{t('age')}</Text>
-                            <TextInput
-                                style={styles.input}
-                                keyboardType="numeric"
-                                value={age}
-                                onChangeText={setAge}
-                                placeholder="30"
-                            />
-
-                            <Text style={styles.label}>{t('height')}</Text>
-                            <TextInput
-                                style={styles.input}
-                                keyboardType="numeric"
-                                value={height}
-                                onChangeText={setHeight}
-                                placeholder="170"
-                            />
-
-                            <Text style={styles.label}>{t('weight')}</Text>
-                            <TextInput
-                                style={styles.input}
-                                keyboardType="numeric"
-                                value={weight}
-                                onChangeText={setWeight}
-                                placeholder="65"
-                            />
-
-                            <TouchableOpacity style={styles.nextButton} onPress={nextStep}>
-                                <Text style={styles.nextButtonText}>{t('next')}</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                );
-            case 2: // Goal
-                return (
-                    <View style={styles.stepContainer}>
-                        <View style={styles.bubble}>
-                            <Text style={styles.bubbleText}>
-                                {t('setYourGoal')}
-                            </Text>
-                        </View>
-                        <Animated.Image
-                            source={require('../../assets/ai_secretary_fitness_1771204309038.png')}
-                            style={[styles.characterImageSmall, { transform: [{ scale: scaleAnim }] }]}
-                            resizeMode="contain"
-                        />
-                        <ScrollView style={styles.formContainer}>
-                            <Text style={styles.label}>{t('activityLevel')}</Text>
-                            <View style={styles.activityContainer}>
-                                {[
-                                    { label: t('sedentary'), value: '1.2' }, // Little or no exercise
-                                    { label: t('light'), value: '1.375' },   // Light exercise 1-3 days/week
-                                    { label: t('moderate'), value: '1.55' },  // Moderate exercise 3-5 days/week
-                                    { label: t('active'), value: '1.725' },   // Hard exercise 6-7 days/week
-                                ].map((level) => (
+                        {/* Gender */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>{t('gender') || '性別'}</Text>
+                            <View style={styles.choiceRow}>
+                                {(['male', 'female', 'other'] as const).map((g) => (
                                     <TouchableOpacity
-                                        key={level.value}
-                                        style={[styles.activityButton, activityLevel === level.value && styles.selectedOption]}
-                                        onPress={() => setActivityLevel(level.value)}
+                                        key={g}
+                                        style={[
+                                            styles.choiceButton,
+                                            gender === g && styles.choiceButtonSelected
+                                        ]}
+                                        onPress={() => setGender(g)}
                                     >
-                                        <Text style={[styles.activityText, activityLevel === level.value && styles.selectedOptionText]}>
-                                            {level.label}
+                                        <Text style={[
+                                            styles.choiceText,
+                                            gender === g && styles.choiceTextSelected
+                                        ]}>
+                                            {t(g as any) || (g === 'male' ? '男性' : g === 'female' ? '女性' : 'その他')}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
+                        </View>
 
-                            <Text style={styles.label}>{t('targetWeight')}</Text>
+                        {/* DOB */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>{t('birthDate') || '生年月日'}</Text>
+                            <View style={styles.dateRow}>
+                                <TextInput
+                                    style={[styles.input, styles.dateInput]}
+                                    value={birthYear}
+                                    onChangeText={setBirthYear}
+                                    placeholder="2000"
+                                    keyboardType="numeric"
+                                    maxLength={4}
+                                />
+                                <Text style={styles.dateSeparator}>{t('year') || '年'}</Text>
+                                <TextInput
+                                    style={[styles.input, styles.dateInputSmall]}
+                                    value={birthMonth}
+                                    onChangeText={setBirthMonth}
+                                    placeholder="01"
+                                    keyboardType="numeric"
+                                    maxLength={2}
+                                />
+                                <Text style={styles.dateSeparator}>{t('month') || '月'}</Text>
+                                <TextInput
+                                    style={[styles.input, styles.dateInputSmall]}
+                                    value={birthDay}
+                                    onChangeText={setBirthDay}
+                                    placeholder="01"
+                                    keyboardType="numeric"
+                                    maxLength={2}
+                                />
+                                <Text style={styles.dateSeparator}>{t('dayLabel') || '日'}</Text>
+                            </View>
+                        </View>
+
+                        {/* Height & Weight */}
+                        <View style={styles.rowGroup}>
+                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                                <Text style={styles.label}>{t('height') || '身長 (cm)'}</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={height}
+                                    onChangeText={setHeight}
+                                    placeholder="170"
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                            <View style={[styles.inputGroup, { flex: 1 }]}>
+                                <Text style={styles.label}>{t('weight') || '現在の体重 (kg)'}</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={weight}
+                                    onChangeText={setWeight}
+                                    placeholder="65.0"
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                        </View>
+
+                        {/* Target Weight */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>{t('targetWeight') || '目標の体重 (kg)'}</Text>
                             <TextInput
                                 style={styles.input}
-                                keyboardType="numeric"
                                 value={targetWeight}
                                 onChangeText={setTargetWeight}
-                                placeholder="60"
+                                placeholder="60.0"
+                                keyboardType="numeric"
                             />
+                        </View>
 
-                            <TouchableOpacity style={[styles.nextButton, { backgroundColor: '#34C759' }]} onPress={finishOnboarding}>
-                                <Text style={styles.nextButtonText}>{t('startApp')}</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
+                        {/* Activity Level */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>{t('activityLevel') || '活動レベル'}</Text>
+                            <View style={styles.activityList}>
+                                {[
+                                    { label: t('sedentary') || '座りっぱなし', sub: t('sedentarySub') || '運動不足、デスクワーク中心', value: '1.2' },
+                                    { label: t('light') || 'やや活発', sub: t('lightSub') || '週1-3回の軽い運動', value: '1.375' },
+                                    { label: t('moderate') || '活発', sub: t('moderateSub') || '週3-5回の定期的な運動', value: '1.55' },
+                                    { label: t('active') || '非常に活発', sub: t('activeSub') || '激しい運動を毎日、肉体労働', value: '1.725' },
+                                ].map((level) => (
+                                    <TouchableOpacity
+                                        key={level.value}
+                                        style={[
+                                            styles.activityCard,
+                                            activityLevel === level.value && styles.activityCardSelected
+                                        ]}
+                                        onPress={() => setActivityLevel(level.value as any)}
+                                    >
+                                        <View style={styles.activityInfo}>
+                                            <Text style={[
+                                                styles.activityLabel,
+                                                activityLevel === level.value && styles.activityLabelSelected
+                                            ]}>{level.label}</Text>
+                                            <Text style={styles.activitySub}>{level.sub}</Text>
+                                        </View>
+                                        {activityLevel === level.value && (
+                                            <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Submit Button */}
+                        <TouchableOpacity
+                            style={styles.submitButton}
+                            onPress={handleFinish}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.submitButtonText}>{t('calculateGoal') || '次へ（目標カロリーを計算する）'}</Text>
+                            <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
                     </View>
-                );
-            default:
-                return null;
-        }
-    };
-
-    return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-        >
-            {renderStep()}
-        </KeyboardAvoidingView>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+    },
     container: {
         flex: 1,
-        backgroundColor: '#fff',
     },
-    stepContainer: {
-        flex: 1,
-        alignItems: 'center',
-        paddingTop: 60,
-        paddingHorizontal: 20,
+    scrollContent: {
+        paddingBottom: 40,
     },
-    characterImage: {
+    header: {
+        paddingHorizontal: 24,
+        paddingTop: 30,
+        paddingBottom: 20,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    headerAccent: {
+        position: 'absolute',
+        top: -100,
+        left: -50,
         width: 300,
         height: 300,
+        borderRadius: 150,
+        opacity: 0.5,
+    },
+    iconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: COLORS.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 5,
         marginBottom: 20,
     },
-    characterImageSmall: {
-        width: 150,
-        height: 150,
-        marginBottom: 10,
+    title: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: COLORS.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
-    bubble: {
-        backgroundColor: '#f0f8ff',
-        padding: 15,
-        borderRadius: 20,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#007AFF',
-        maxWidth: '90%',
-    },
-    bubbleText: {
+    subtitle: {
         fontSize: 16,
-        color: '#333',
-        textAlign: 'center',
+        color: COLORS.textSecondary,
+        fontWeight: '500',
     },
-    formContainer: {
-        width: '100%',
-        flex: 1,
+    form: {
+        paddingHorizontal: 24,
+    },
+    inputGroup: {
+        marginBottom: 20,
+    },
+    rowGroup: {
+        flexDirection: 'row',
+        marginBottom: 10,
     },
     label: {
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: 14,
+        fontWeight: '700',
+        color: COLORS.text,
         marginBottom: 8,
-        marginTop: 15,
-        color: '#333',
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    optionButton: {
-        flex: 1,
-        padding: 15,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 10,
-        marginHorizontal: 5,
-        alignItems: 'center',
-    },
-    selectedOption: {
-        backgroundColor: '#007AFF',
-        borderColor: '#007AFF',
-    },
-    optionText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    selectedOptionText: {
-        color: '#fff',
-        fontWeight: 'bold',
+        marginLeft: 4,
     },
     input: {
+        backgroundColor: COLORS.white,
         borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 10,
-        padding: 15,
-        fontSize: 18,
-        marginBottom: 10,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 16,
+        color: COLORS.text,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
     },
-    nextButton: {
-        backgroundColor: '#007AFF',
-        padding: 18,
-        borderRadius: 30,
-        alignItems: 'center',
-        marginTop: 30,
-        marginBottom: 50,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    nextButtonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    activityContainer: {
+    choiceRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
         justifyContent: 'space-between',
     },
-    activityButton: {
-        width: '48%',
-        padding: 12,
+    choiceButton: {
+        flex: 1,
+        backgroundColor: COLORS.white,
         borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 10,
-        marginBottom: 10,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        paddingVertical: 14,
+        alignItems: 'center',
+        marginHorizontal: 4,
+    },
+    choiceButtonSelected: {
+        borderColor: COLORS.primary,
+        backgroundColor: '#E3F2FD',
+    },
+    choiceText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+    },
+    choiceTextSelected: {
+        color: COLORS.primary,
+    },
+    dateRow: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
-    activityText: {
+    dateInput: {
+        flex: 2,
+    },
+    dateInputSmall: {
+        flex: 1,
+    },
+    dateSeparator: {
+        marginHorizontal: 6,
         fontSize: 14,
-        color: '#333',
-        textAlign: 'center',
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+    },
+    activityList: {
+        gap: 12,
+    },
+    activityCard: {
+        backgroundColor: COLORS.white,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    activityCardSelected: {
+        borderColor: COLORS.primary,
+        backgroundColor: '#F0F9FF',
+    },
+    activityInfo: {
+        flex: 1,
+    },
+    activityLabel: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: COLORS.text,
+        marginBottom: 4,
+    },
+    activityLabelSelected: {
+        color: COLORS.primary,
+    },
+    activitySub: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+    },
+    submitButton: {
+        backgroundColor: COLORS.primary,
+        borderRadius: 20,
+        paddingVertical: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 20,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+        elevation: 8,
+    },
+    submitButtonText: {
+        color: COLORS.white,
+        fontSize: 18,
+        fontWeight: '800',
     },
 });
 

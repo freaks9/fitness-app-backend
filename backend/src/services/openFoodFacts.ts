@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const BASE_URL = 'https://world.openfoodfacts.org/api/v2/product';
 // User-Agent is required by Open Food Facts
-const USER_AGENT = 'FitnessApp/1.0 (shinichiro@example.com) - Educational Project';
+const USER_AGENT = 'SmartBlueLabFitness/1.0 (contact@smartbluelab.fitness) - Production App';
 
 export interface ProductData {
     product_name: string;

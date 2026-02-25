@@ -1,15 +1,30 @@
+import { getAdvice } from './foodApiService';
+
+/**
+ * AIによる食事アドバイスを取得する（ゴールデンルール Rule 1準拠）
+ * バックエンドの /ai/advice/:userId エンドポイントを呼び出します。
+ * 
+ * @param userId ユーザーID
+ * @param date 日付（YYYY-MM-DD形式、省略時は当日）
+ * @returns アドバイスの文字列配列
+ */
+export const getMealAdvice = async (userId: string, date?: string): Promise<string[]> => {
+    try {
+        const response = await getAdvice(userId, date);
+        // バックエンドからは { advice: string[] } が返ってくる
+        return response.advice || ["アドバイスを取得できませんでした。"];
+    } catch (error) {
+        console.error("AIアドバイスの取得に失敗しました:", error);
+        return ["現在アドバイスを生成できません。ネットワーク状況を確認し、再度お試しください。"];
+    }
+};
+
+/**
+ * 画像解析のモック（将来的な拡張用）
+ */
 export const analyzeImage = async (base64Image: string): Promise<{ name: string; calories: number } | null> => {
-    // In a real app, you would send the base64Image to OpenAI or Gemini API here.
-    // Example:
-    // const response = await fetch('https://api.openai.com/v1/chat/completions', { ... });
-
     console.log('Analyzing image...');
-
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Mock response based on "random" chance or fixed for demo
-    // We can return a random item from our DB or a generic one.
+    await new Promise(resolve => setTimeout(resolve, 1500));
     const mockResponses = [
         { name: '牛丼 (並)', calories: 730 },
         { name: 'シーザーサラダ', calories: 230 },
@@ -17,7 +32,5 @@ export const analyzeImage = async (base64Image: string): Promise<{ name: string;
         { name: 'ハンバーガー', calories: 350 },
         { name: 'カツカレー', calories: 950 },
     ];
-
-    const random = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-    return random;
+    return mockResponses[Math.floor(Math.random() * mockResponses.length)];
 };

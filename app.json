@@ -2,7 +2,7 @@
   "expo": {
     "name": "カララボ",
     "slug": "fitness_app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "AIコーチと共感する、次世代の食生活研究室。",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,11 +10,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.colorlab.fitness",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSUserTrackingUsageDescription": "個別にカスタマイズされた広告を表示するために、トラッキングの許可をお願いします。"
       }
     },
     "android": {
@@ -60,6 +61,14 @@
         "expo-image-picker",
         {
           "photosPermission": "食事の画像を解析するために、写真ライブラリへのアクセスを許可してください。"
+        }
+      ],
+      "react-native-iap",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ]
     ],
