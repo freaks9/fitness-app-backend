@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Button, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguageContext } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
@@ -99,7 +99,9 @@ const SettingsScreen = ({ navigation }: any) => {
                 await AsyncStorage.setItem('weight_history', JSON.stringify(weightHistory));
             }
 
-            Alert.alert(t('success'), t('goalUpdated', { goal: calculatedGoal }));
+            Alert.alert(t('success'), t('goalUpdated', { goal: calculatedGoal }), [
+                { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
         } catch {
             Alert.alert(t('error'), t('saveFailed'));
         }
@@ -135,118 +137,127 @@ const SettingsScreen = ({ navigation }: any) => {
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <Text style={styles.title}>{t('userSettings')}</Text>
-
-            {/* Rank Badge */}
-            <View style={styles.rankContainer}>
-                <Ionicons name="medal" size={40} color={profile.streakCount && profile.streakCount >= 30 ? '#FFD700' : profile.streakCount && profile.streakCount >= 7 ? '#C0C0C0' : '#CD7F32'} />
-                <View style={styles.rankInfo}>
-                    <Text style={styles.rankLabel}>現在のランク</Text>
-                    <Text style={styles.rankValue}>{profile.rank || '見習い研究員'}</Text>
-                    <Text style={styles.streakText}>{profile.streakCount || 0} 日連続継続中</Text>
-                </View>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+            {/* Header with back button */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>{t('userSettings')}</Text>
+                <View style={{ width: 40 }} />
             </View>
+            <ScrollView contentContainerStyle={styles.container}>
 
-            <TouchableOpacity
-                style={styles.premiumButton}
-                onPress={() => navigation.navigate('Premium')}
-            >
-                <Text style={styles.premiumButtonText}>プレミアムプランについて</Text>
-                <Ionicons name="chevron-forward" size={20} color="#fff" />
-            </TouchableOpacity>
-
-            <Text style={styles.label}>{t('language')}</Text>
-            <View style={styles.row}>
-                <Button
-                    title={language === 'en' ? `${t('english')} (Selected)` : t('english')}
-                    onPress={() => setLanguage('en')}
-                    color={language === 'en' ? '#007AFF' : '#ccc'}
-                />
-                <Button
-                    title={language === 'ja' ? `${t('japanese')} (Selected)` : t('japanese')}
-                    onPress={() => setLanguage('ja')}
-                    color={language === 'ja' ? '#FF2D55' : '#ccc'}
-                />
-            </View>
-
-            <Text style={styles.label}>{t('weight')}</Text>
-            <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={weight}
-                onChangeText={setWeight}
-                placeholder="e.g. 70"
-            />
-
-            <Text style={styles.label}>{t('targetWeight')}</Text>
-            <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={targetWeight}
-                onChangeText={setTargetWeight}
-                placeholder="e.g. 60"
-            />
-
-            <Text style={styles.label}>{t('height')}</Text>
-            <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={height}
-                onChangeText={setHeight}
-                placeholder="e.g. 175"
-            />
-
-            <Text style={styles.label}>{t('age')}</Text>
-            <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={age}
-                onChangeText={setAge}
-                placeholder="e.g. 30"
-            />
-
-            <Text style={styles.label}>{t('gender')}</Text>
-            <View style={styles.row}>
-                <Button title={gender === 'male' ? `${t('male')} (Selected)` : t('male')} onPress={() => setGender('male')} color={gender === 'male' ? '#007AFF' : '#ccc'} />
-                <Button title={gender === 'female' ? `${t('female')} (Selected)` : t('female')} onPress={() => setGender('female')} color={gender === 'female' ? '#FF2D55' : '#ccc'} />
-            </View>
-
-            <Text style={styles.label}>{t('activityLevel')}</Text>
-            <View style={styles.activityContainer}>
-                {[
-                    { label: t('sedentary'), value: '1.2' },
-                    { label: t('light'), value: '1.375' },
-                    { label: t('moderate'), value: '1.55' },
-                    { label: t('active'), value: '1.725' },
-                    { label: t('veryActive'), value: '1.9' },
-                ].map((level) => (
-                    <View key={level.value} style={styles.activityButton}>
-                        <Button
-                            title={level.label}
-                            onPress={() => setActivityLevel(level.value)}
-                            color={activityLevel === level.value ? '#34C759' : '#ccc'}
-                        />
+                {/* Rank Badge */}
+                <View style={styles.rankContainer}>
+                    <Ionicons name="medal" size={40} color={profile.streakCount && profile.streakCount >= 30 ? '#FFD700' : profile.streakCount && profile.streakCount >= 7 ? '#C0C0C0' : '#CD7F32'} />
+                    <View style={styles.rankInfo}>
+                        <Text style={styles.rankLabel}>現在のランク</Text>
+                        <Text style={styles.rankValue}>{profile.rank || '見習い研究員'}</Text>
+                        <Text style={styles.streakText}>{profile.streakCount || 0} 日連続継続中</Text>
                     </View>
-                ))}
-            </View>
-
-            <View style={styles.separator} />
-
-            <Button title={t('saveGoal')} onPress={calculateGoal} />
-
-            {goal && (
-                <View style={styles.resultContainer}>
-                    <Text style={styles.resultText}>{t('dailyGoal', { goal })}</Text>
                 </View>
-            )}
 
-            <View style={styles.separator} />
-            <Button title={t('resetData')} onPress={resetData} color="red" />
-            <View style={styles.separator} />
-            <Button title="Logout" onPress={() => logout()} color="#ff0000" />
-            <View style={styles.separator} />
-        </ScrollView>
+                <TouchableOpacity
+                    style={styles.premiumButton}
+                    onPress={() => navigation.navigate('Premium')}
+                >
+                    <Text style={styles.premiumButtonText}>プレミアムプランについて</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#fff" />
+                </TouchableOpacity>
+
+                <Text style={styles.label}>{t('language')}</Text>
+                <View style={styles.row}>
+                    <Button
+                        title={language === 'en' ? `${t('english')} (Selected)` : t('english')}
+                        onPress={() => setLanguage('en')}
+                        color={language === 'en' ? '#007AFF' : '#ccc'}
+                    />
+                    <Button
+                        title={language === 'ja' ? `${t('japanese')} (Selected)` : t('japanese')}
+                        onPress={() => setLanguage('ja')}
+                        color={language === 'ja' ? '#FF2D55' : '#ccc'}
+                    />
+                </View>
+
+                <Text style={styles.label}>{t('weight')}</Text>
+                <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={weight}
+                    onChangeText={setWeight}
+                    placeholder="e.g. 70"
+                />
+
+                <Text style={styles.label}>{t('targetWeight')}</Text>
+                <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={targetWeight}
+                    onChangeText={setTargetWeight}
+                    placeholder="e.g. 60"
+                />
+
+                <Text style={styles.label}>{t('height')}</Text>
+                <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={height}
+                    onChangeText={setHeight}
+                    placeholder="e.g. 175"
+                />
+
+                <Text style={styles.label}>{t('age')}</Text>
+                <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={age}
+                    onChangeText={setAge}
+                    placeholder="e.g. 30"
+                />
+
+                <Text style={styles.label}>{t('gender')}</Text>
+                <View style={styles.row}>
+                    <Button title={gender === 'male' ? `${t('male')} (Selected)` : t('male')} onPress={() => setGender('male')} color={gender === 'male' ? '#007AFF' : '#ccc'} />
+                    <Button title={gender === 'female' ? `${t('female')} (Selected)` : t('female')} onPress={() => setGender('female')} color={gender === 'female' ? '#FF2D55' : '#ccc'} />
+                </View>
+
+                <Text style={styles.label}>{t('activityLevel')}</Text>
+                <View style={styles.activityContainer}>
+                    {[
+                        { label: t('sedentary'), value: '1.2' },
+                        { label: t('light'), value: '1.375' },
+                        { label: t('moderate'), value: '1.55' },
+                        { label: t('active'), value: '1.725' },
+                        { label: t('veryActive'), value: '1.9' },
+                    ].map((level) => (
+                        <View key={level.value} style={styles.activityButton}>
+                            <Button
+                                title={level.label}
+                                onPress={() => setActivityLevel(level.value)}
+                                color={activityLevel === level.value ? '#34C759' : '#ccc'}
+                            />
+                        </View>
+                    ))}
+                </View>
+
+                <View style={styles.separator} />
+
+                <Button title={t('saveGoal')} onPress={calculateGoal} />
+
+                {goal && (
+                    <View style={styles.resultContainer}>
+                        <Text style={styles.resultText}>{t('dailyGoal', { goal })}</Text>
+                    </View>
+                )}
+
+                <View style={styles.separator} />
+                <Button title={t('resetData')} onPress={resetData} color="red" />
+                <View style={styles.separator} />
+                <Button title="Logout" onPress={() => logout()} color="#ff0000" />
+                <View style={styles.separator} />
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
@@ -256,8 +267,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         flexGrow: 1,
     },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        backgroundColor: '#fff',
+    },
+    backBtn: { width: 40, height: 40, justifyContent: 'center' },
+    headerTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
     title: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',

@@ -1,0 +1,22 @@
+Starting project at /Users/shinichiro/antigravity/fitness_app
+Starting Metro Bundler
+Waiting on http://localhost:8083
+Logs for your project will appear below.
+[metro-file-map] Cache write error
+: Error: EPERM: operation not permitted, open '/var/folders/dy/drq9kdxn5nldtp35b2vv0d_m0000gn/T/metro-file-map-36511d0b1a43eb522caa13095c1e0f48-787e21b910323ccc82bab0d16d5ce9f4'
+    at open (node:internal/fs/promises:637:25)
+    at Object.writeFile (node:internal/fs/promises:1239:14)
+    at /Users/shinichiro/antigravity/fitness_app/node_modules/metro-file-map/src/cache/DiskCacheManager.js:80:11
+    at DiskCacheManager.write (/Users/shinichiro/antigravity/fitness_app/node_modules/metro-file-map/src/cache/DiskCacheManager.js:106:7)
+    at FileMap._takeSnapshotAndPersist (/Users/shinichiro/antigravity/fitness_app/node_modules/metro-file-map/src/index.js:459:5)
+    at /Users/shinichiro/antigravity/fitness_app/node_modules/metro-file-map/src/index.js:255:9
+    at DependencyGraph.ready (/Users/shinichiro/antigravity/fitness_app/node_modules/metro/src/node-haste/DependencyGraph.js:88:5)
+    at Bundler.ready (/Users/shinichiro/antigravity/fitness_app/node_modules/metro/src/Bundler.js:62:5)
+    at IncrementalBundler.ready (/Users/shinichiro/antigravity/fitness_app/node_modules/metro/src/IncrementalBundler.js:302:5)
+    at Server.ready (/Users/shinichiro/antigravity/fitness_app/node_modules/metro/src/Server.js:1305:5) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'open',
+  path: '/var/folders/dy/drq9kdxn5nldtp35b2vv0d_m0000gn/T/metro-file-map-36511d0b1a43eb522caa13095c1e0f48-787e21b910323ccc82bab0d16d5ce9f4'
+}
+› Detected a change in babel.config.js. Restart the server to see the new results. You may need to clear the bundler cache with the --clear flag for your changes to take effect.

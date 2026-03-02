@@ -22,7 +22,7 @@ const PremiumScreen = () => {
     const { t } = useLanguageContext();
     const { profile, updateProfile } = useUser();
     const [loading, setLoading] = useState(false);
-    const [subscriptions, setSubscriptions] = useState<IAP.Subscription[]>([]);
+    const [subscriptions, setSubscriptions] = useState<IAP.Product[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
 
     useEffect(() => {
         const loadProducts = async () => {

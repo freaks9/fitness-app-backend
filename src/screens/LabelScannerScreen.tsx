@@ -72,10 +72,10 @@ const LabelScannerScreen = ({ navigation }: any) => {
 
     if (!permission.granted) {
         return (
-            <View style={styles.container}>
-                <Text style={{ textAlign: 'center' }}>{t('permissionRequired')}</Text>
+            <View style={styles.permissionContainer}>
+                <Text style={styles.permissionText}>{t('permissionRequired')}</Text>
                 <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
-                    <Text style={styles.permissionButtonText}>{t('ok')}</Text>
+                    <Text style={styles.permissionButtonText}>続ける</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -154,6 +154,20 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#000',
+    },
+    permissionContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    permissionText: {
+        textAlign: 'center',
+        fontSize: 16,
+        color: '#333',
+        marginBottom: 8,
+        lineHeight: 24,
     },
     camera: {
         flex: 1,

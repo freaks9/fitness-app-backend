@@ -1,89 +1,56 @@
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AdEventType, InterstitialAd, TestIds } from 'react-native-google-mobile-ads';
+import {
+    AdEventType,
+    InterstitialAd,
+    TestIds,
+} from 'react-native-google-mobile-ads';
 import { CONFIG } from '../constants/Config';
 
 const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : CONFIG.AD_UNIT_IDS.INTERSTITIAL;
+const AD_COUNT_KEY = 'interstitial_ad_count';
+
+const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
+    requestNonPersonalizedAdsOnly: false,
+});
+
+let isLoaded = false;
+
+// Preload
+interstitial.addAdEventListener(AdEventType.LOADED, () => {
+    isLoaded = true;
+});
+interstitial.addAdEventListener(AdEventType.ERROR, () => {
+    isLoaded = false;
+    // Retry after 30s
+    setTimeout(() => interstitial.load(), 30000);
+});
+interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+    isLoaded = false;
+    interstitial.load();
+});
+interstitial.load();
 
 export const useInterstitialAd = () => {
-    const [ad, setAd] = useState<InterstitialAd | null>(null);
-    const [loaded, setLoaded] = useState(false);
-    const onAdDismissed = useRef<(() => void) | null>(null);
-
-    const loadAd = useCallback(() => {
-        const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
-            requestNonPersonalizedAdsOnly: false,
-        });
-
-        const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
-            setLoaded(true);
-        });
-
-        const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
-            setLoaded(false);
-            if (onAdDismissed.current) {
-                onAdDismissed.current();
-                onAdDismissed.current = null;
-            }
-            // Load the next ad
-            loadAd();
-        });
-
-        const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (error) => {
-            console.error('Ad failed to load: ', error);
-            setLoaded(false);
-            // If error, we still want to proceed with navigation if it was waiting
-            if (onAdDismissed.current) {
-                onAdDismissed.current();
-                onAdDismissed.current = null;
-            }
-        });
-
-        interstitial.load();
-        setAd(interstitial);
-
-        return () => {
-            unsubscribeLoaded();
-            unsubscribeClosed();
-            unsubscribeError();
-        };
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = loadAd();
-        return unsubscribe;
-    }, [loadAd]);
-
-    const showAdIfReady = async (callback: () => void) => {
+    const showAdIfReady = async (onComplete: () => void) => {
         try {
-            // Get current count
-            const countStr = await AsyncStorage.getItem('ad_counter');
-            let count = countStr ? parseInt(countStr, 10) : 0;
+            const countStr = await AsyncStorage.getItem(AD_COUNT_KEY);
+            const count = parseInt(countStr || '0', 10) + 1;
+            await AsyncStorage.setItem(AD_COUNT_KEY, String(count));
 
-            count += 1;
-            await AsyncStorage.setItem('ad_counter', count.toString());
-
-            console.log(`Ad counter: ${count} / ${CONFIG.AD_FREQUENCY}`);
-
-            if (count >= CONFIG.AD_FREQUENCY && ad && loaded) {
-                // Reset counter
-                await AsyncStorage.setItem('ad_counter', '0');
-
-                // Set callback to run after ad is closed
-                onAdDismissed.current = callback;
-
-                // Show ad
-                ad.show();
+            if (count % CONFIG.AD_FREQUENCY === 0 && isLoaded) {
+                const closeListener = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+                    closeListener();
+                    onComplete();
+                });
+                interstitial.show();
             } else {
-                // Just run the callback if not time for ad or ad not loaded
-                callback();
+                onComplete();
             }
-        } catch (error) {
-            console.error('Error in showAdIfReady:', error);
-            callback();
+        } catch (e) {
+            console.warn('[InterstitialAd] Error:', e);
+            onComplete();
         }
     };
 
-    return { showAdIfReady, loaded };
+    return { showAdIfReady, loaded: isLoaded };
 };

@@ -5,6 +5,7 @@ import { prisma } from '../db';
 
 export default async function mealLogRoutes(fastify: FastifyInstance) {
     fastify.post('/meal', async (request, reply) => {
+        console.log('POST /meal request received');
         const { userId, barcode, quantity, mealType, date, name, calories, protein, fat, carbs } = request.body as {
             userId: string;
             barcode: string;
@@ -19,8 +20,10 @@ export default async function mealLogRoutes(fastify: FastifyInstance) {
         };
 
         if (!userId || !barcode || !quantity || !mealType) {
+            console.error('POST /meal: Missing fields', { userId, barcode, quantity, mealType });
             return reply.code(400).send({ error: 'Missing required fields' });
         }
+        console.log(`POST /meal: userId=${userId}, barcode=${barcode}, quantity=${quantity}, mealType=${mealType}, date=${date}`);
 
         try {
             // Verify or Create product
@@ -121,6 +124,7 @@ export default async function mealLogRoutes(fastify: FastifyInstance) {
 
     async function fetchMealsForDate(userId: string, dateStr: string, reply: any) {
         try {
+            console.log(`fetchMealsForDate: userId=${userId}, dateStr=${dateStr}`);
             const date = new Date(dateStr);
             const startOfDay = new Date(date);
             startOfDay.setHours(0, 0, 0, 0);
@@ -140,6 +144,7 @@ export default async function mealLogRoutes(fastify: FastifyInstance) {
                     foodProduct: true
                 }
             });
+            console.log(`fetchMealsForDate: Found ${dailyLogs.length} logs`);
 
             const meals = dailyLogs.map((log: any) => {
                 if (!log.foodProduct) {

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import * as IAP from 'react-native-iap';
 import { supabase } from '../lib/supabase';
 import * as foodApi from '../services/foodApiService';
@@ -243,19 +243,22 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const dateStr = dateOverride || new Date().toISOString().split('T')[0];
             const { data: { session } } = await supabase.auth.getSession();
+            console.log('UserContext: loadTodaysMeals - session exists:', !!session);
 
             if (session) {
                 try {
+                    console.log('UserContext: Syncing with backend...');
                     const response = await foodApi.getDailyLogs(session.user.id, dateStr);
+                    console.log('UserContext: Backend sync complete');
                     if (response && response.meals) {
-                        const newMeals = response.meals;
-                        const currentMealsJson = JSON.stringify(todaysMeals);
-                        const newMealsJson = JSON.stringify(newMeals);
-
-                        if (currentMealsJson !== newMealsJson) {
-                            setTodaysMeals(newMeals);
-                        }
-                        await AsyncStorage.setItem(`meals_${dateStr}`, JSON.stringify(newMeals));
+                        const syncedMeals = response.meals;
+                        setTodaysMeals(prev => {
+                            if (JSON.stringify(prev) !== JSON.stringify(syncedMeals)) {
+                                return syncedMeals;
+                            }
+                            return prev;
+                        });
+                        await AsyncStorage.setItem(`meals_${dateStr}`, JSON.stringify(syncedMeals));
                         return;
                     }
                 } catch (apiError) {
@@ -264,11 +267,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const savedMeals = await AsyncStorage.getItem(`meals_${dateStr}`);
-            if (savedMeals) {
-                setTodaysMeals(JSON.parse(savedMeals));
-            } else {
-                setTodaysMeals([]);
-            }
+            const mealsToSet = savedMeals ? JSON.parse(savedMeals) : [];
+            setTodaysMeals(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(mealsToSet)) {
+                    return mealsToSet;
+                }
+                return prev;
+            });
         } catch (error) {
             console.error('Failed to load meals:', error);
         }
@@ -430,25 +435,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadLabStats();
 
         // IAP Purchase Update Listener
-        const purchaseUpdateSubscription = IAP.purchaseUpdateListener(async (purchase: IAP.Purchase) => {
-            const receipt = purchase.transactionReceipt;
+        const purchaseUpdateSubscription = IAP.purchaseUpdatedListener(async (purchase: IAP.Purchase) => {
+            // iOS (StoreKit 2) と Android どちらも purchaseToken に統合されている
+            const receipt = purchase.purchaseToken;
             if (receipt) {
                 try {
-                    // Logic to verify receipt should go here if needed
-                    // For now, we trust the purchase on the device and update state
+                    // TODO: 本番前にサーバー側でレシート検証を行うことを推奨
+                    // 現状はクライアント側でトラストし、isPremium を true にする
                     await updateProfile({ isPremium: true });
-                    if (Platform.OS === 'ios') {
-                        await IAP.finishTransaction({ purchase, isConsumable: false });
-                    }
+                    await IAP.finishTransaction({ purchase, isConsumable: false });
                     Alert.alert('ありがとうございます！', 'プレミアムプランへの加入が完了しました。');
                 } catch (ackErr) {
-                    console.warn('ackErr', ackErr);
+                    console.warn('finishTransaction error:', ackErr);
                 }
+            } else {
+                console.warn('IAP: purchase received but no receipt found', purchase);
             }
         });
 
-        const purchaseErrorSubscription = IAP.purchaseErrorListener((error: IAP.IAPErrorCode) => {
+        const purchaseErrorSubscription = IAP.purchaseErrorListener((error: IAP.PurchaseError) => {
             console.warn('purchaseErrorListener', error);
+            // UserCancelled はユーザーが自分でキャンセルしたため通知不要
+            if (error.code !== IAP.ErrorCode.UserCancelled) {
+                Alert.alert('購入エラー', error.message || '購入処理中にエラーが発生しました。');
+            }
         });
 
         return () => {
@@ -456,6 +466,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             purchaseErrorSubscription.remove();
         };
     }, []);
+
 
     const contextValue = useMemo(() => ({
         profile, todaysMeals, mealHistory, updateProfile, loadProfile, addMeal, deleteMeal, loadTodaysMeals,

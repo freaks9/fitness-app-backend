@@ -47,6 +47,7 @@ const start = async () => {
         fastify.log.info('Connected to Database');
 
         const port = Number(process.env.PORT) || 3000;
+        console.log(`Backend listening on port ${port}... URL: http://localhost:${port}`);
         await fastify.listen({ port, host: '0.0.0.0' });
     } catch (err) {
         fastify.log.error(err);

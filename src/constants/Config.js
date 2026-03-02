@@ -4,7 +4,6 @@ export const CONFIG = {
     AD_FREQUENCY: 3,
 
     // 広告と制限の設定
-    AD_FREQUENCY: 3,
     FREE_PLAN_DAILY_LIMIT: 3,
     REWARDED_AD_DAILY_LIMIT: 3,
     TRIAL_DAYS: 3,
@@ -15,9 +14,9 @@ export const CONFIG = {
         REWARDED: 'ca-app-pub-3940256099942544/5224354917',
     },
 
-    // 課金アイテムの設定
+    // 課金アイテムの設定（App Store ConnectのProduct IDと一致させること）
     IAP_PRODUCT_IDS: {
-        MONTHLY: 'com.yourname.kalalab.monthly_300',
-        YEARLY: 'com.yourname.kalalab.yearly_3000',
+        MONTHLY: 'com.colorlab.fitness.monthly_300',
+        YEARLY: 'com.colorlab.fitness.yearly_3000',
     }
 };

@@ -1,8 +1,22 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useLanguageContext } from '../../context/LanguageContext';
 import { supabase } from '../../lib/supabase';
+
+const { width } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }: any) => {
     const [email, setEmail] = useState('');
@@ -25,7 +39,7 @@ const LoginScreen = ({ navigation }: any) => {
 
     const handleForgotPassword = async () => {
         if (!email) {
-            Alert.alert(t('forgotPassword'), t('emailPlaceholder') + ' ' + t('checkInbox')); // Simplified prompt
+            Alert.alert(t('forgotPassword'), t('emailPlaceholder') + ' ' + t('checkInbox'));
             return;
         }
         setLoading(true);
@@ -43,47 +57,58 @@ const LoginScreen = ({ navigation }: any) => {
             colors={['#4c669f', '#3b5998', '#192f6a']}
             style={styles.container}
         >
-            <View style={styles.card}>
-                <Text style={styles.title}>{t('welcomeBack')}</Text>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.card}>
+                        <Text style={styles.title}>{t('welcomeBack')}</Text>
 
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder={t('emailPlaceholder')}
-                        placeholderTextColor="#aaa"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                    />
-                </View>
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder={t('passwordPlaceholder')}
-                        placeholderTextColor="#aaa"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                    />
-                </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder={t('emailPlaceholder')}
+                                placeholderTextColor="#aaa"
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                            />
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder={t('passwordPlaceholder')}
+                                placeholderTextColor="#aaa"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                            />
+                        </View>
 
-                <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>{t('login')}</Text>
-                    )}
-                </TouchableOpacity>
+                        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>{t('login')}</Text>
+                            )}
+                        </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleForgotPassword} style={styles.linkButton}>
-                    <Text style={styles.linkText}>{t('forgotPassword')}</Text>
-                </TouchableOpacity>
+                        <TouchableOpacity onPress={handleForgotPassword} style={styles.linkButton}>
+                            <Text style={styles.linkText}>{t('forgotPassword')}</Text>
+                        </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.linkButton}>
-                    <Text style={styles.linkText}>{t('noAccount')}</Text>
-                </TouchableOpacity>
-            </View>
+                        <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.linkButton}>
+                            <Text style={styles.linkText}>{t('noAccount')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </LinearGradient>
     );
 };
@@ -91,6 +116,12 @@ const LoginScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         padding: 20,
     },
@@ -98,6 +129,10 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
         borderRadius: 20,
         padding: 30,
+        // iPad対応: 最大幅を設定して中央揃え
+        maxWidth: 480,
+        width: '100%',
+        alignSelf: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.25,
@@ -121,6 +156,7 @@ const styles = StyleSheet.create({
         padding: 15,
         fontSize: 16,
         color: '#333',
+        minHeight: 50, // タップ領域を確保
     },
     button: {
         backgroundColor: '#007AFF',
@@ -128,6 +164,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         marginTop: 10,
+        minHeight: 50,
         shadowColor: '#007AFF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -142,6 +179,8 @@ const styles = StyleSheet.create({
     linkButton: {
         marginTop: 20,
         alignItems: 'center',
+        minHeight: 44, // Apple HIG: 最小タップ領域44pt
+        justifyContent: 'center',
     },
     linkText: {
         color: '#007AFF',

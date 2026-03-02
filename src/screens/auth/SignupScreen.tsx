@@ -1,9 +1,23 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguageContext } from '../../context/LanguageContext';
 import { supabase } from '../../lib/supabase';
+
+const { width } = Dimensions.get('window');
 
 const SignupScreen = ({ navigation }: any) => {
     const [email, setEmail] = useState('');
@@ -37,49 +51,60 @@ const SignupScreen = ({ navigation }: any) => {
             colors={['#4c669f', '#3b5998', '#192f6a']}
             style={styles.container}
         >
-            <View style={styles.card}>
-                <Text style={styles.title}>{t('signup')}</Text>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.card}>
+                        <Text style={styles.title}>{t('signup')}</Text>
 
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder={t('emailPlaceholder')}
-                        placeholderTextColor="#aaa"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                    />
-                </View>
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder={t('passwordPlaceholder')}
-                        placeholderTextColor="#aaa"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                    />
-                </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder={t('emailPlaceholder')}
+                                placeholderTextColor="#aaa"
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                            />
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder={t('passwordPlaceholder')}
+                                placeholderTextColor="#aaa"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                            />
+                        </View>
 
-                <TouchableOpacity style={styles.button} onPress={handleSignup} disabled={loading}>
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>{t('signup')}</Text>
-                    )}
-                </TouchableOpacity>
+                        <TouchableOpacity style={styles.button} onPress={handleSignup} disabled={loading}>
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>{t('signup')}</Text>
+                            )}
+                        </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.linkButton}>
-                    <Text style={styles.linkText}>{t('hasAccount')}</Text>
-                </TouchableOpacity>
+                        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.linkButton}>
+                            <Text style={styles.linkText}>{t('hasAccount')}</Text>
+                        </TouchableOpacity>
 
-                <View style={styles.divider} />
+                        <View style={styles.divider} />
 
-                <TouchableOpacity onPress={handleGuestLogin} style={styles.guestButton}>
-                    <Text style={styles.guestButtonText}>{t('tryLater')}</Text>
-                </TouchableOpacity>
-            </View>
+                        <TouchableOpacity onPress={handleGuestLogin} style={styles.guestButton}>
+                            <Text style={styles.guestButtonText}>{t('tryLater')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </LinearGradient>
     );
 };
@@ -87,6 +112,12 @@ const SignupScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         padding: 20,
     },
@@ -94,6 +125,10 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
         borderRadius: 20,
         padding: 30,
+        // iPad対応: 最大幅を設定して中央揃え
+        maxWidth: 480,
+        width: '100%',
+        alignSelf: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.25,
@@ -117,13 +152,15 @@ const styles = StyleSheet.create({
         padding: 15,
         fontSize: 16,
         color: '#333',
+        minHeight: 50,
     },
     button: {
-        backgroundColor: '#34C759', // Green for signup
+        backgroundColor: '#34C759',
         padding: 15,
         borderRadius: 10,
         alignItems: 'center',
         marginTop: 10,
+        minHeight: 50,
         shadowColor: '#34C759',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -138,6 +175,8 @@ const styles = StyleSheet.create({
     linkButton: {
         marginTop: 20,
         alignItems: 'center',
+        minHeight: 44,
+        justifyContent: 'center',
     },
     linkText: {
         color: '#007AFF',
@@ -155,6 +194,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#eee',
         borderRadius: 10,
         alignItems: 'center',
+        minHeight: 50,
+        justifyContent: 'center',
     },
     guestButtonText: {
         color: '#666',

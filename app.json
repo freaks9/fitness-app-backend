@@ -2,7 +2,7 @@
   "expo": {
     "name": "カララボ",
     "slug": "fitness_app",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "AIコーチと共感する、次世代の食生活研究室。",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,15 +12,16 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.colorlab.fitness",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSUserTrackingUsageDescription": "個別にカスタマイズされた広告を表示するために、トラッキングの許可をお願いします。"
+        "NSUserTrackingUsageDescription": "個別にカスタマイズされた広告を表示するために、トラッキングの許可をお願いします。",
+        "GADApplicationIdentifier": "ca-app-pub-3940256099942544~1458002511"
       }
     },
     "android": {
       "package": "com.colorlab.fitness",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -35,7 +36,7 @@
       ]
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -58,17 +59,20 @@
         }
       ],
       [
-        "expo-image-picker",
-        {
-          "photosPermission": "食事の画像を解析するために、写真ライブラリへのアクセスを許可してください。"
-        }
+        "react-native-iap",
+        {}
       ],
-      "react-native-iap",
       [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "個別にカスタマイズされた広告を表示するために、トラッキングの許可をお願いします。"
         }
       ]
     ],

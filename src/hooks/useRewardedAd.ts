@@ -1,70 +1,61 @@
-
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AdEventType, RewardedAd, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { useEffect, useRef, useState } from 'react';
+import {
+    AdEventType,
+    RewardedAd,
+    RewardedAdEventType,
+    TestIds,
+} from 'react-native-google-mobile-ads';
 import { CONFIG } from '../constants/Config';
 
 const adUnitId = __DEV__ ? TestIds.REWARDED : CONFIG.AD_UNIT_IDS.REWARDED;
 
 export const useRewardedAd = () => {
-    const [ad, setAd] = useState<RewardedAd | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [isShowing, setIsShowing] = useState(false);
-    const onEarnedReward = useRef<(() => void) | null>(null);
+    const rewardedRef = useRef<RewardedAd | null>(null);
+    const earnedCallbackRef = useRef<(() => void) | null>(null);
 
-    const loadAd = useCallback(() => {
+    useEffect(() => {
         const rewarded = RewardedAd.createForAdRequest(adUnitId, {
             requestNonPersonalizedAdsOnly: false,
         });
+        rewardedRef.current = rewarded;
 
-        const unsubscribeLoaded = rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        const loadedSub = rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
             setLoaded(true);
         });
-
-        const unsubscribeEarned = rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-            console.log('User earned reward of ', reward);
-            if (onEarnedReward.current) {
-                onEarnedReward.current();
-                onEarnedReward.current = null;
-            }
+        const earnedSub = rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+            earnedCallbackRef.current?.();
         });
-
-        const unsubscribeClosed = rewarded.addAdEventListener(AdEventType.CLOSED, () => {
-            setLoaded(false);
+        const closedSub = rewarded.addAdEventListener(AdEventType.CLOSED, () => {
             setIsShowing(false);
-            // Load the next ad
-            loadAd();
+            setLoaded(false);
+            rewarded.load();
         });
-
-        const unsubscribeError = rewarded.addAdEventListener(AdEventType.ERROR, (error) => {
-            console.error('Rewarded Ad failed: ', error);
+        const errorSub = rewarded.addAdEventListener(AdEventType.ERROR, () => {
             setLoaded(false);
-            setIsShowing(false);
+            setTimeout(() => rewarded.load(), 30000);
         });
 
         rewarded.load();
-        setAd(rewarded);
 
         return () => {
-            unsubscribeLoaded();
-            unsubscribeEarned();
-            unsubscribeClosed();
-            unsubscribeError();
+            loadedSub();
+            earnedSub();
+            closedSub();
+            errorSub();
         };
     }, []);
 
-    useEffect(() => {
-        const unsubscribe = loadAd();
-        return unsubscribe;
-    }, [loadAd]);
-
-    const showRewardedAd = (callback: () => void) => {
-        if (loaded && ad) {
-            onEarnedReward.current = callback;
-            setIsShowing(true);
-            ad.show();
-            return true;
+    const showRewardedAd = (onEarned: () => void) => {
+        if (!loaded || !rewardedRef.current) {
+            console.warn('[RewardedAd] Ad not loaded yet');
+            return false;
         }
-        return false;
+        earnedCallbackRef.current = onEarned;
+        setIsShowing(true);
+        rewardedRef.current.show();
+        return true;
     };
 
     return { showRewardedAd, loaded, isShowing };

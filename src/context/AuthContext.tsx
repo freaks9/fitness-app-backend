@@ -28,27 +28,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        // Safety timeout: ensure loading ends eventually (5s)
+        const timeout = setTimeout(() => {
+            setIsLoading(false);
+        }, 3000);
+
         // Check for existing session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            checkGuestMode(session);
+        supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+            checkGuestMode(currentSession).finally(() => {
+                clearTimeout(timeout);
+                setIsLoading(false);
+            });
+        }).catch(err => {
+            console.error('getSession error:', err);
+            setIsLoading(false);
+            clearTimeout(timeout);
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+            if (currentSession) {
                 setIsGuest(false);
                 AsyncStorage.removeItem('isGuest');
             }
         });
 
-        // Auto-fix for existing guests who don't have a Supabase session
+        // Guest mode persistence check
         AsyncStorage.getItem('isGuest').then(isGuestFlag => {
             if (isGuestFlag === 'true') {
-                supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-                    if (!currentSession) {
+                supabase.auth.getSession().then(({ data: { session: guestSession } }) => {
+                    if (!guestSession) {
                         supabase.auth.signInAnonymously().then(({ data: { session: newSession } }) => {
                             if (newSession) {
                                 setSession(newSession);
@@ -69,7 +81,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const guest = await AsyncStorage.getItem('isGuest');
             setIsGuest(guest === 'true');
         }
-        setIsLoading(false);
     };
 
     const enterGuestMode = async () => {

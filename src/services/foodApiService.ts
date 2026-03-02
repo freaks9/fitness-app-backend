@@ -36,6 +36,7 @@ const api = axios.create({
 
 export const scanFood = async (barcode: string) => {
     try {
+        console.log(`API Request: scanFood(${barcode}) to ${API_URL}`);
         const response = await api.get(`food/scan/${barcode}`);
         return response.data;
     } catch (error) {
@@ -57,10 +58,12 @@ export const logMeal = async (
     carbs?: number
 ) => {
     try {
+        console.log(`API Request: logMeal for userId=${userId}, barcode=${barcode} to ${API_URL}`);
         const response = await api.post('logs/meal', {
             userId, barcode, quantity, mealType, date,
             name, calories, protein, fat, carbs
         });
+        console.log('API Response: logMeal success');
         return response.data;
     } catch (error) {
         console.error('Log Meal Error:', error);
@@ -71,7 +74,9 @@ export const logMeal = async (
 export const getDailyLogs = async (userId: string, date?: string) => {
     try {
         const endpoint = date ? `logs/${userId}/date/${date}` : `logs/${userId}/today`;
+        console.log(`API Request: getDailyLogs from ${API_URL}${endpoint}`);
         const response = await api.get(endpoint);
+        console.log(`API Response: getDailyLogs found ${response.data.meals?.length || 0} meals`);
         return response.data;
     } catch (error) {
         console.error('Get Daily Logs Error:', error);
@@ -175,9 +180,11 @@ export const getAdvice = async (userId: string, date?: string) => {
 
 export const deleteMealLog = async (userId: string, date: string, mealId: string | number) => {
     try {
+        console.log(`API Request: deleteMealLog mealId=${mealId} to ${API_URL}`);
         const response = await api.delete('logs/meal', {
             data: { userId, date, mealId }
         });
+        console.log('API Response: deleteMealLog success');
         return response.data;
     } catch (error) {
         console.error('Delete Meal Log Error:', error);

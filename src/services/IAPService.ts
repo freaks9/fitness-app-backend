@@ -2,57 +2,64 @@ import { Platform } from 'react-native';
 import * as IAP from 'react-native-iap';
 import { CONFIG } from '../constants/Config';
 
-const itemSkus = Platform.select({
-    ios: [
-        CONFIG.IAP_PRODUCT_IDS.MONTHLY,
-        CONFIG.IAP_PRODUCT_IDS.YEARLY,
-    ],
-    android: [
-        CONFIG.IAP_PRODUCT_IDS.MONTHLY,
-        CONFIG.IAP_PRODUCT_IDS.YEARLY,
-    ],
+// App Store Connect に登録した Product ID と一致させること
+const subscriptionSkus = Platform.select({
+    ios: [CONFIG.IAP_PRODUCT_IDS.MONTHLY, CONFIG.IAP_PRODUCT_IDS.YEARLY],
+    android: [CONFIG.IAP_PRODUCT_IDS.MONTHLY, CONFIG.IAP_PRODUCT_IDS.YEARLY],
 }) || [];
 
 export const IAPService = {
     async init() {
         try {
             await IAP.initConnection();
-            if (Platform.OS === 'android') {
-                await IAP.flushFailedPurchasesCachedAsPendingAndroid();
-            }
         } catch (err) {
-            console.warn('IAP init error', err);
+            console.warn('IAP init error:', err);
         }
     },
 
-    async getSubscriptions(): Promise<IAP.Subscription[]> {
+    /**
+     * App Store からサブスクリプション商品情報を取得する
+     * type: 'subs' を指定してサブスクリプション商品のみ取得
+     */
+    async getSubscriptions(): Promise<IAP.Product[]> {
         try {
-            return await IAP.getSubscriptions({ skus: itemSkus });
+            const products = await IAP.fetchProducts({ skus: subscriptionSkus, type: 'subs' });
+            return (products ?? []) as IAP.Product[];
         } catch (err) {
-            console.warn('IAP getSubscriptions error', err);
+            console.warn('Get subscriptions error:', err);
             return [];
         }
     },
 
+    /**
+     * サブスクリプション購入を開始する
+     * type: 'subs' を指定し、iOS では apple.sku を渡す
+     */
     async requestSubscription(sku: string) {
-        try {
-            await IAP.requestSubscription({ sku });
-        } catch (err) {
-            console.warn('IAP requestSubscription error', err);
-            throw err;
-        }
+        return await IAP.requestPurchase({
+            request: { apple: { sku } },
+            type: 'subs',
+        });
     },
 
+    /**
+     * 購入履歴（アクティブなサブスクリプション含む）を取得する
+     * 「購入を復元」ボタンで使用
+     */
     async getPurchaseHistory() {
         try {
-            return await IAP.getPurchaseHistory();
+            return await IAP.getAvailablePurchases() ?? [];
         } catch (err) {
-            console.warn('IAP getPurchaseHistory error', err);
+            console.warn('Get purchase history error:', err);
             return [];
         }
     },
 
     async end() {
-        await IAP.endConnection();
+        try {
+            await IAP.endConnection();
+        } catch (err) {
+            console.warn('IAP end error:', err);
+        }
     }
 };

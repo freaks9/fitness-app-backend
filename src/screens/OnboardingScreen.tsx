@@ -1,14 +1,10 @@
-
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
+    Alert, DeviceEventEmitter, Image, KeyboardAvoidingView,
     Platform,
     SafeAreaView,
-    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
@@ -16,463 +12,423 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { useLanguageContext } from '../context/LanguageContext';
+import Animated, {
+    FadeInRight,
+    FadeOutLeft,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from 'react-native-reanimated';
+import { useAuth } from '../context/AuthContext';
+import { useUser } from '../context/UserContext';
 import { calculateGoals } from '../services/calculator';
 
-// width not used
-
-// Design System Constants
 const COLORS = {
-    background: '#F8FAFC',
     primary: '#1E88E5',
+    background: '#F8FAFC',
     text: '#0F172A',
     textSecondary: '#64748B',
     white: '#FFFFFF',
     border: '#E2E8F0',
-    error: '#EF4444',
 };
 
+type StepKey = 'nickname' | 'gender' | 'birthdate' | 'height' | 'weight' | 'targetWeight' | 'activityLevel';
+
+interface Step {
+    key: StepKey;
+    label: string;
+    question: string | ((name: string) => string);
+}
+
+const STEPS: Step[] = [
+    { key: 'nickname', label: 'ニックネーム', question: 'まずはあなたをどうお呼びすればいいですか？' },
+    { key: 'gender', label: '性別', question: (name: string) => `${name}さん、性別を教えてください。` },
+    { key: 'birthdate', label: '生年月日', question: (name: string) => `${name}さん、生年月日を教えてください。` },
+    { key: 'height', label: '身長', question: (name: string) => `${name}さん、現在の身長（cm）は？` },
+    { key: 'weight', label: '現在の体重', question: (name: string) => `${name}さん、現在の体重（kg）は？` },
+    { key: 'targetWeight', label: '目標体重', question: (name: string) => `${name}さんの目標体重（kg）は？` },
+    { key: 'activityLevel', label: '活動レベル', question: '普段の活動量を教えてください。' },
+];
+
+const ACTIVITY_OPTIONS = [
+    { label: '低い', sub: '座りっぱなし・デスクワーク中心', value: '1.2' },
+    { label: '普通', sub: '立ち仕事や頻繁な移動あり', value: '1.375' },
+    { label: '高い', sub: '肉体労働や激しい運動をする', value: '1.725' },
+];
+
 const OnboardingScreen = ({ navigation }: any) => {
-    const { t } = useLanguageContext();
-    const [nickname, setNickname] = useState('');
-    const [gender, setGender] = useState<'male' | 'female' | 'other' | null>(null);
-    const [birthYear, setBirthYear] = useState('');
-    const [birthMonth, setBirthMonth] = useState('');
-    const [birthDay, setBirthDay] = useState('');
-    const [height, setHeight] = useState('');
-    const [weight, setWeight] = useState('');
-    const [targetWeight, setTargetWeight] = useState('');
-    const [activityLevel, setActivityLevel] = useState<'1.2' | '1.375' | '1.55' | '1.725'>('1.2');
+    const { updateProfile } = useUser();
+    const { enterGuestMode } = useAuth();
+    const [currentStep, setCurrentStep] = useState(0);
+    const [formData, setFormData] = useState({
+        nickname: '',
+        gender: '' as 'male' | 'female' | 'other' | '',
+        birthYear: '',
+        birthMonth: '',
+        birthDay: '',
+        height: '',
+        weight: '',
+        targetWeight: '',
+        activityLevel: '1.2',
+    });
 
-    const calculateAge = (year: string, month: string, day: string) => {
-        const y = parseInt(year);
-        const m = parseInt(month);
-        const d = parseInt(day);
-        if (isNaN(y) || isNaN(m) || isNaN(d)) return 30; // Default
+    const progress = useSharedValue(0);
 
-        const today = new Date();
-        const birthDate = new Date(y, m - 1, d);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
+    useEffect(() => {
+        progress.value = withTiming((currentStep + 1) / STEPS.length, { duration: 400 });
+    }, [currentStep]);
+
+    const animatedProgressStyle = useAnimatedStyle(() => ({
+        width: `${progress.value * 100}%`,
+    }));
+
+    const currentQuestion = typeof STEPS[currentStep].question === 'function'
+        ? (STEPS[currentStep].question as (n: string) => string)(formData.nickname || 'あなた')
+        : STEPS[currentStep].question;
+
+    const validateCurrentStep = (): boolean => {
+        const key = STEPS[currentStep].key;
+        switch (key) {
+            case 'nickname': return formData.nickname.trim().length > 0;
+            case 'gender': return formData.gender !== '';
+            case 'birthdate': return formData.birthYear.length === 4 && formData.birthMonth.length > 0 && formData.birthDay.length > 0;
+            case 'height': return parseFloat(formData.height) > 0;
+            case 'weight': return parseFloat(formData.weight) > 0;
+            case 'targetWeight': return parseFloat(formData.targetWeight) > 0;
+            case 'activityLevel': return true;
+            default: return true;
         }
-        return age;
     };
-    const handleFinish = async () => {
-        if (!nickname || !gender || !birthYear || !birthMonth || !birthDay || !height || !weight || !targetWeight) {
-            Alert.alert(t('error') || 'Error', t('pleaseEnterAllFields') || 'Please enter all fields.');
+
+    const handleNext = async () => {
+        if (!validateCurrentStep()) {
+            Alert.alert('入力エラー', '項目を入力してください。');
             return;
         }
-
-        const age = calculateAge(birthYear, birthMonth, birthDay);
-        const w = parseFloat(weight);
-        const h = parseFloat(height);
-        const tw = parseFloat(targetWeight);
-
-        if (isNaN(w) || isNaN(h) || isNaN(tw)) {
-            Alert.alert(t('error') || 'Error', t('invalidInput') || 'Invalid input.');
-            return;
+        if (currentStep < STEPS.length - 1) {
+            setCurrentStep(s => s + 1);
+        } else {
+            await finishOnboarding();
         }
+    };
 
-        const profile = {
-            gender: gender === 'other' ? 'male' : gender as any, // fallback for calc
-            age,
-            heightCm: h,
-            weightKg: w,
-            activityLevel: activityLevel,
-            targetWeightKg: tw,
-        };
-
-        const result = calculateGoals(profile);
-
-        const settings = {
-            nickname,
-            gender,
-            birthDate: `${birthYear}-${birthMonth}-${birthDay}`,
-            age,
-            weight,
-            height,
-            targetWeight,
-            activityLevel,
-            goal: result.dailyCalorieGoal,
-            pfcGoals: result.pfcGoals,
-        };
-
+    const finishOnboarding = async () => {
         try {
-            await AsyncStorage.setItem('userSettings', JSON.stringify(settings));
+            const y = parseInt(formData.birthYear);
+            const m = parseInt(formData.birthMonth);
+            const d = parseInt(formData.birthDay);
+            const today = new Date();
+            const birthDate = new Date(y, m - 1, d);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            if (today.getMonth() < m - 1 || (today.getMonth() === m - 1 && today.getDate() < d)) age--;
+            age = Math.max(1, age);
 
-            // Save initial weight to history
-            const today = new Date().toISOString().split('T')[0];
-            const initialHistory = [{ date: today, weight: w }];
-            await AsyncStorage.setItem('weight_history', JSON.stringify(initialHistory));
+            const profile = {
+                nickname: formData.nickname,
+                gender: (formData.gender === 'other' ? 'male' : formData.gender) as 'male' | 'female',
+                age,
+                heightCm: parseFloat(formData.height),
+                weightKg: parseFloat(formData.weight),
+                targetWeightKg: parseFloat(formData.targetWeight),
+                activityLevel: formData.activityLevel as any,
+            };
 
+            const result = calculateGoals(profile);
+
+            await updateProfile({
+                ...profile,
+                goal: result.dailyCalorieGoal,
+                pfcGoals: result.pfcGoals,
+            } as any);
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            await AsyncStorage.setItem('weight_history', JSON.stringify([{ date: todayStr, weight: parseFloat(formData.weight) }]));
             await AsyncStorage.setItem('onboardingCompleted', 'true');
-            navigation.replace('Main');
+            DeviceEventEmitter.emit('onboardingComplete');
+            await enterGuestMode();
         } catch (e) {
-            console.error('Failed to save onboarding data', e);
+            console.error(e);
+            Alert.alert('エラー', 'データの保存に失敗しました。');
         }
+    };
+
+    const renderStepContent = () => {
+        const key = STEPS[currentStep].key;
+
+        if (key === 'nickname') {
+            return (
+                <TextInput
+                    style={styles.bigInput}
+                    value={formData.nickname}
+                    onChangeText={(v) => setFormData(f => ({ ...f, nickname: v }))}
+                    placeholder="例：タナカ"
+                    placeholderTextColor="#94A3B8"
+                    autoFocus
+                    maxLength={20}
+                />
+            );
+        }
+
+        if (key === 'gender') {
+            const options = [
+                { label: '男性', value: 'male' },
+                { label: '女性', value: 'female' },
+                { label: 'その他', value: 'other' },
+            ];
+            return (
+                <View style={styles.optionContainer}>
+                    {options.map(opt => (
+                        <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.optionButton, formData.gender === opt.value && styles.optionButtonActive]}
+                            onPress={() => setFormData(f => ({ ...f, gender: opt.value as any }))}
+                        >
+                            <Text style={[styles.optionText, formData.gender === opt.value && styles.optionTextActive]}>
+                                {opt.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            );
+        }
+
+        if (key === 'birthdate') {
+            return (
+                <View style={styles.dateRow}>
+                    <TextInput
+                        style={[styles.bigInput, styles.dateInputYear]}
+                        value={formData.birthYear}
+                        onChangeText={(v) => setFormData(f => ({ ...f, birthYear: v }))}
+                        placeholder="1995"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={4}
+                        autoFocus
+                    />
+                    <Text style={styles.dateSep}>年</Text>
+                    <TextInput
+                        style={[styles.bigInput, styles.dateInputSmall]}
+                        value={formData.birthMonth}
+                        onChangeText={(v) => setFormData(f => ({ ...f, birthMonth: v }))}
+                        placeholder="01"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={2}
+                    />
+                    <Text style={styles.dateSep}>月</Text>
+                    <TextInput
+                        style={[styles.bigInput, styles.dateInputSmall]}
+                        value={formData.birthDay}
+                        onChangeText={(v) => setFormData(f => ({ ...f, birthDay: v }))}
+                        placeholder="01"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={2}
+                    />
+                    <Text style={styles.dateSep}>日</Text>
+                </View>
+            );
+        }
+
+        if (key === 'activityLevel') {
+            return (
+                <View style={styles.activityContainer}>
+                    {ACTIVITY_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.activityCard, formData.activityLevel === opt.value && styles.activityCardActive]}
+                            onPress={() => setFormData(f => ({ ...f, activityLevel: opt.value }))}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.activityLabel, formData.activityLevel === opt.value && { color: COLORS.primary }]}>
+                                    {opt.label}
+                                </Text>
+                                <Text style={styles.activitySub}>{opt.sub}</Text>
+                            </View>
+                            {formData.activityLevel === opt.value && (
+                                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            );
+        }
+
+        // numeric inputs: height, weight, targetWeight
+        const placeholders: Record<string, string> = {
+            height: '170',
+            weight: '65.0',
+            targetWeight: '60.0',
+        };
+        const units: Record<string, string> = {
+            height: 'cm',
+            weight: 'kg',
+            targetWeight: 'kg',
+        };
+
+        return (
+            <View style={styles.numericRow}>
+                <TextInput
+                    style={[styles.bigInput, { flex: 1 }]}
+                    value={(formData as any)[key]}
+                    onChangeText={(v) => setFormData(f => ({ ...f, [key]: v }))}
+                    placeholder={placeholders[key]}
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                    autoFocus
+                />
+                <Text style={styles.unitLabel}>{units[key]}</Text>
+            </View>
+        );
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.container}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* HeaderSection */}
-                    <View style={styles.header}>
-                        <LinearGradient
-                            colors={['#E3F2FD', '#F8FAFC']}
-                            style={styles.headerAccent}
-                        />
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="sparkles" size={30} color={COLORS.primary} />
+
+            {/* Progress */}
+            <View style={styles.progressTrack}>
+                <Animated.View style={[styles.progressBar, animatedProgressStyle]} />
+            </View>
+            <Text style={styles.stepCounter}>{currentStep + 1} / {STEPS.length}</Text>
+
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <View style={styles.content}>
+                    {/* AI Character */}
+                    <View style={styles.characterSection}>
+                        <View style={styles.avatarWrapper}>
+                            <Image
+                                source={require('../../assets/ai_coach_welcome.png')}
+                                style={styles.avatar}
+                                resizeMode="cover"
+                            />
                         </View>
-                        <Text style={styles.title}>AIと一緒に、{"\n"}理想のカラダへ。</Text>
-                        <Text style={styles.subtitle}>まずはあなたのことを教えてください</Text>
+                        <View style={styles.bubble}>
+                            <Text style={styles.bubbleText}>{currentQuestion}</Text>
+                            <View style={styles.bubbleArrow} />
+                        </View>
                     </View>
 
-                    {/* FormSection */}
-                    <View style={styles.form}>
-                        {/* Nickname */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('nickname') || 'ニックネーム'}</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={nickname}
-                                onChangeText={setNickname}
-                                placeholder={t('exampleName') || '例：タナカ'}
-                                placeholderTextColor="#94A3B8"
-                            />
-                        </View>
+                    {/* Step Content */}
+                    <Animated.View
+                        key={currentStep}
+                        entering={FadeInRight.duration(300)}
+                        exiting={FadeOutLeft.duration(200)}
+                        style={styles.stepContent}
+                    >
+                        <Text style={styles.stepLabel}>{STEPS[currentStep].label}</Text>
+                        {renderStepContent()}
+                    </Animated.View>
 
-                        {/* Gender */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('gender') || '性別'}</Text>
-                            <View style={styles.choiceRow}>
-                                {(['male', 'female', 'other'] as const).map((g) => (
-                                    <TouchableOpacity
-                                        key={g}
-                                        style={[
-                                            styles.choiceButton,
-                                            gender === g && styles.choiceButtonSelected
-                                        ]}
-                                        onPress={() => setGender(g)}
-                                    >
-                                        <Text style={[
-                                            styles.choiceText,
-                                            gender === g && styles.choiceTextSelected
-                                        ]}>
-                                            {t(g as any) || (g === 'male' ? '男性' : g === 'female' ? '女性' : 'その他')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* DOB */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('birthDate') || '生年月日'}</Text>
-                            <View style={styles.dateRow}>
-                                <TextInput
-                                    style={[styles.input, styles.dateInput]}
-                                    value={birthYear}
-                                    onChangeText={setBirthYear}
-                                    placeholder="2000"
-                                    keyboardType="numeric"
-                                    maxLength={4}
-                                />
-                                <Text style={styles.dateSeparator}>{t('year') || '年'}</Text>
-                                <TextInput
-                                    style={[styles.input, styles.dateInputSmall]}
-                                    value={birthMonth}
-                                    onChangeText={setBirthMonth}
-                                    placeholder="01"
-                                    keyboardType="numeric"
-                                    maxLength={2}
-                                />
-                                <Text style={styles.dateSeparator}>{t('month') || '月'}</Text>
-                                <TextInput
-                                    style={[styles.input, styles.dateInputSmall]}
-                                    value={birthDay}
-                                    onChangeText={setBirthDay}
-                                    placeholder="01"
-                                    keyboardType="numeric"
-                                    maxLength={2}
-                                />
-                                <Text style={styles.dateSeparator}>{t('dayLabel') || '日'}</Text>
-                            </View>
-                        </View>
-
-                        {/* Height & Weight */}
-                        <View style={styles.rowGroup}>
-                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                                <Text style={styles.label}>{t('height') || '身長 (cm)'}</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={height}
-                                    onChangeText={setHeight}
-                                    placeholder="170"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-                            <View style={[styles.inputGroup, { flex: 1 }]}>
-                                <Text style={styles.label}>{t('weight') || '現在の体重 (kg)'}</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={weight}
-                                    onChangeText={setWeight}
-                                    placeholder="65.0"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-                        </View>
-
-                        {/* Target Weight */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('targetWeight') || '目標の体重 (kg)'}</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={targetWeight}
-                                onChangeText={setTargetWeight}
-                                placeholder="60.0"
-                                keyboardType="numeric"
-                            />
-                        </View>
-
-                        {/* Activity Level */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('activityLevel') || '活動レベル'}</Text>
-                            <View style={styles.activityList}>
-                                {[
-                                    { label: t('sedentary') || '座りっぱなし', sub: t('sedentarySub') || '運動不足、デスクワーク中心', value: '1.2' },
-                                    { label: t('light') || 'やや活発', sub: t('lightSub') || '週1-3回の軽い運動', value: '1.375' },
-                                    { label: t('moderate') || '活発', sub: t('moderateSub') || '週3-5回の定期的な運動', value: '1.55' },
-                                    { label: t('active') || '非常に活発', sub: t('activeSub') || '激しい運動を毎日、肉体労働', value: '1.725' },
-                                ].map((level) => (
-                                    <TouchableOpacity
-                                        key={level.value}
-                                        style={[
-                                            styles.activityCard,
-                                            activityLevel === level.value && styles.activityCardSelected
-                                        ]}
-                                        onPress={() => setActivityLevel(level.value as any)}
-                                    >
-                                        <View style={styles.activityInfo}>
-                                            <Text style={[
-                                                styles.activityLabel,
-                                                activityLevel === level.value && styles.activityLabelSelected
-                                            ]}>{level.label}</Text>
-                                            <Text style={styles.activitySub}>{level.sub}</Text>
-                                        </View>
-                                        {activityLevel === level.value && (
-                                            <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                                        )}
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Submit Button */}
-                        <TouchableOpacity
-                            style={styles.submitButton}
-                            onPress={handleFinish}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.submitButtonText}>{t('calculateGoal') || '次へ（目標カロリーを計算する）'}</Text>
-                            <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={{ marginLeft: 8 }} />
+                    {/* Footer Nav */}
+                    <View style={styles.footer}>
+                        {currentStep > 0 ? (
+                            <TouchableOpacity style={styles.backButton} onPress={() => setCurrentStep(s => s - 1)}>
+                                <Ionicons name="arrow-back" size={22} color={COLORS.textSecondary} />
+                            </TouchableOpacity>
+                        ) : <View style={{ width: 56 }} />}
+                        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+                            <Text style={styles.nextButtonText}>
+                                {currentStep === STEPS.length - 1 ? 'はじめる' : '次へ'}
+                            </Text>
+                            <Ionicons name={currentStep === STEPS.length - 1 ? 'rocket' : 'chevron-forward'} size={20} color={COLORS.white} />
                         </TouchableOpacity>
                     </View>
-                </ScrollView>
+                </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: COLORS.background,
+    container: { flex: 1, backgroundColor: COLORS.background },
+    progressTrack: { height: 5, backgroundColor: '#E2E8F0', width: '100%' },
+    progressBar: { height: '100%', backgroundColor: COLORS.primary, borderRadius: 3 },
+    stepCounter: { textAlign: 'right', paddingHorizontal: 20, paddingTop: 8, fontSize: 13, color: '#94A3B8', fontWeight: '600' },
+
+    content: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
+
+    // AI Character
+    characterSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
+    avatarWrapper: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', borderWidth: 2, borderColor: COLORS.primary },
+    avatar: { width: '100%', height: '100%' },
+    bubble: {
+        flex: 1, backgroundColor: COLORS.white, padding: 16,
+        borderRadius: 16, marginLeft: 16,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06, shadowRadius: 12, elevation: 3, position: 'relative',
     },
-    container: {
-        flex: 1,
+    bubbleText: { fontSize: 15, color: COLORS.text, lineHeight: 22, fontWeight: '600' },
+    bubbleArrow: {
+        position: 'absolute', left: -10, top: 24,
+        width: 0, height: 0,
+        borderTopWidth: 10, borderTopColor: 'transparent',
+        borderRightWidth: 10, borderRightColor: COLORS.white,
+        borderBottomWidth: 10, borderBottomColor: 'transparent',
     },
-    scrollContent: {
-        paddingBottom: 40,
+
+    // Step Content
+    stepContent: { flex: 1 },
+    stepLabel: {
+        fontSize: 12, fontWeight: '700', color: COLORS.primary,
+        textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16,
     },
-    header: {
-        paddingHorizontal: 24,
-        paddingTop: 30,
-        paddingBottom: 20,
-        position: 'relative',
-        overflow: 'hidden',
+
+    // Input
+    bigInput: {
+        fontSize: 28, fontWeight: '700', color: COLORS.text,
+        borderBottomWidth: 2.5, borderBottomColor: COLORS.primary,
+        paddingVertical: 10, backgroundColor: 'transparent',
     },
-    headerAccent: {
-        position: 'absolute',
-        top: -100,
-        left: -50,
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        opacity: 0.5,
+    numericRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+    unitLabel: { fontSize: 20, fontWeight: '700', color: COLORS.textSecondary, paddingBottom: 10 },
+
+    // Birthdate
+    dateRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+    dateInputYear: { width: 90 },
+    dateInputSmall: { width: 56 },
+    dateSep: { fontSize: 18, fontWeight: '700', color: COLORS.textSecondary, paddingBottom: 10, marginHorizontal: 2 },
+
+    // Gender Options
+    optionContainer: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+    optionButton: {
+        paddingVertical: 18, paddingHorizontal: 28,
+        borderRadius: 14, borderWidth: 1.5,
+        borderColor: COLORS.border, backgroundColor: COLORS.white,
     },
-    iconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: COLORS.white,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 5,
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: COLORS.text,
-        lineHeight: 40,
-        marginBottom: 12,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: COLORS.textSecondary,
-        fontWeight: '500',
-    },
-    form: {
-        paddingHorizontal: 24,
-    },
-    inputGroup: {
-        marginBottom: 20,
-    },
-    rowGroup: {
-        flexDirection: 'row',
-        marginBottom: 10,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.text,
-        marginBottom: 8,
-        marginLeft: 4,
-    },
-    input: {
-        backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-        color: COLORS.text,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2,
-    },
-    choiceRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    choiceButton: {
-        flex: 1,
-        backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 12,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginHorizontal: 4,
-    },
-    choiceButtonSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: '#E3F2FD',
-    },
-    choiceText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
-    },
-    choiceTextSelected: {
-        color: COLORS.primary,
-    },
-    dateRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    dateInput: {
-        flex: 2,
-    },
-    dateInputSmall: {
-        flex: 1,
-    },
-    dateSeparator: {
-        marginHorizontal: 6,
-        fontSize: 14,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
-    },
-    activityList: {
-        gap: 12,
-    },
+    optionButtonActive: { borderColor: COLORS.primary, backgroundColor: '#E3F2FD' },
+    optionText: { fontSize: 16, fontWeight: '600', color: COLORS.textSecondary },
+    optionTextActive: { color: COLORS.primary },
+
+    // Activity
+    activityContainer: { gap: 12 },
     activityCard: {
-        backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 16,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        backgroundColor: COLORS.white, borderWidth: 1.5,
+        borderColor: COLORS.border, borderRadius: 16, padding: 16,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
-    activityCardSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: '#F0F9FF',
+    activityCardActive: { borderColor: COLORS.primary, backgroundColor: '#F0F9FF' },
+    activityLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 3 },
+    activitySub: { fontSize: 12, color: COLORS.textSecondary },
+
+    // Footer Nav
+    footer: {
+        flexDirection: 'row', alignItems: 'center',
+        justifyContent: 'space-between', paddingBottom: 36, gap: 12,
     },
-    activityInfo: {
-        flex: 1,
+    backButton: {
+        width: 56, height: 56, borderRadius: 28,
+        backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
     },
-    activityLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.text,
-        marginBottom: 4,
-    },
-    activityLabelSelected: {
-        color: COLORS.primary,
-    },
-    activitySub: {
-        fontSize: 12,
-        color: COLORS.textSecondary,
-    },
-    submitButton: {
-        backgroundColor: COLORS.primary,
-        borderRadius: 20,
-        paddingVertical: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 20,
+    nextButton: {
+        flex: 1, height: 56, backgroundColor: COLORS.primary,
+        borderRadius: 28, flexDirection: 'row',
+        alignItems: 'center', justifyContent: 'center',
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-        elevation: 8,
+        shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
     },
-    submitButtonText: {
-        color: COLORS.white,
-        fontSize: 18,
-        fontWeight: '800',
-    },
+    nextButtonText: { color: COLORS.white, fontSize: 18, fontWeight: '800', marginRight: 8 },
 });
 
 export default OnboardingScreen;

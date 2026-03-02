@@ -76,7 +76,7 @@ const WelcomeScreen = ({ navigation }: any) => {
 
                     {/* Main Catchphrase */}
                     <Text style={styles.title}>
-                        AIが、あなたの{"\n"}専属トレーナーになる。
+                        AIがあなたの{"\n"}専属トレーナーになる
                     </Text>
 
                     {/* Lead Text */}

@@ -1,6 +1,6 @@
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
-import { Alert, Button, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
 import { analyzeImage } from '../services/aiService';
 
@@ -13,17 +13,19 @@ export default function CameraScreen({ navigation }: any) {
     const cameraRef = useRef<CameraView>(null);
 
     if (!permission) {
-        // Camera permissions are still loading.
         return <View />;
     }
 
     if (!permission.granted) {
-        // Camera permissions are not granted yet.
         return (
-            <View style={styles.container}>
-                <Text style={styles.message}>{t('permissionRequired')}</Text>
-                <Button onPress={requestPermission} title="grant permission" />
-            </View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.permissionContainer}>
+                <ScrollView contentContainerStyle={styles.permissionContent}>
+                    <Text style={styles.message}>{t('permissionRequired')}</Text>
+                    <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                        <Text style={styles.permissionButtonText}>続ける</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
         );
     }
 
@@ -121,6 +123,28 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         justifyContent: 'center',
+    },
+    permissionContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    permissionContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    permissionButton: {
+        backgroundColor: '#007AFF',
+        paddingHorizontal: 40,
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginTop: 20,
+    },
+    permissionButtonText: {
+        color: '#fff',
+        fontSize: 17,
+        fontWeight: '600',
     },
     message: {
         textAlign: 'center',

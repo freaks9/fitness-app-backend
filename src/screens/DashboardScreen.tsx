@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
-import { ResizeMode, Video } from 'expo-av';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -251,6 +250,7 @@ const styles = StyleSheet.create({
 });
 
 const DashboardScreen = ({ navigation }: any) => {
+    console.log('DashboardScreen: Component rendering...');
     // const { user } = useAuth(); // Removed unused
     const { t, language } = useLanguageContext();
     const { profile, todaysMeals, loadTodaysMeals, deleteMeal: deleteMealContext, updateProfile } = useUser();
@@ -332,7 +332,7 @@ const DashboardScreen = ({ navigation }: any) => {
             // Artificial delay for premium feel
             setTimeout(() => setIsLoading(false), 800);
         }
-    }, [selectedDate, profile, loadTodaysMeals]);
+    }, [selectedDate, loadTodaysMeals]);
 
     const isFocused = useIsFocused();
     useEffect(() => {
@@ -353,7 +353,9 @@ const DashboardScreen = ({ navigation }: any) => {
                             onPress: async () => {
                                 const newCount = await StreakService.resetStreak();
                                 setCurrentStreak(newCount);
-                                await updateProfile({ streakCount: newCount });
+                                if (profile.streakCount !== newCount) {
+                                    await updateProfile({ streakCount: newCount });
+                                }
                             }
                         },
                         {
@@ -362,7 +364,9 @@ const DashboardScreen = ({ navigation }: any) => {
                                 showRewardedAd(async () => {
                                     const newCount = await StreakService.recoverStreak();
                                     setCurrentStreak(newCount);
-                                    await updateProfile({ streakCount: newCount });
+                                    if (profile.streakCount !== newCount) {
+                                        await updateProfile({ streakCount: newCount });
+                                    }
                                     Alert.alert('復活完了！', '継続日数が復元されました。');
                                 });
                             }
@@ -370,13 +374,20 @@ const DashboardScreen = ({ navigation }: any) => {
                     ]
                 );
             } else {
-                await updateProfile({ streakCount: result.currentStreak });
+                if (profile.streakCount !== result.currentStreak) {
+                    await updateProfile({ streakCount: result.currentStreak });
+                }
             }
         };
 
         if (isFocused) {
-            loadData();
             handleStreak();
+        }
+    }, [isFocused]);
+
+    useEffect(() => {
+        if (isFocused) {
+            loadData();
         }
     }, [isFocused, loadData]);
 
@@ -555,6 +566,7 @@ const DashboardScreen = ({ navigation }: any) => {
         );
     };
 
+    console.log('DashboardScreen: Final render - profile exists:', !!profile);
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <SyncLoadingOverlay visible={isLoading} />
@@ -604,16 +616,10 @@ const DashboardScreen = ({ navigation }: any) => {
                 {/* AI Coach */}
                 <View style={styles.characterSection}>
                     <View style={[styles.videoWrapper, isHighSalt && { borderColor: '#EF4444' }]}>
-                        <Video
-                            source={isHighSalt ? COACH_VIDEO_WORRIED : COACH_VIDEO_NORMAL}
-                            style={styles.video}
-                            resizeMode={ResizeMode.COVER}
-                            isLooping
-                            isMuted
-                            shouldPlay
-                            onError={(error) => {
-                                console.log('Video loading error:', error);
-                            }}
+                        <Image
+                            source={require('../../assets/ai_coach_welcome.png')}
+                            style={[styles.video, isHighSalt && { tintColor: '#EF4444', opacity: 0.85 }]}
+                            resizeMode="cover"
                         />
                     </View>
                     <View style={styles.bubble}>

@@ -1,0 +1,21 @@
+/Users/shinichiro/antigravity/fitness_app/node_modules/expo/node_modules/@expo/cli/build/src/utils/errors.js:130
+    throw error;
+    ^
+
+Error: EPERM: operation not permitted, open '/Users/shinichiro/antigravity/fitness_app/.env'
+    at Object.readFileSync (node:fs:439:20)
+    at /Users/shinichiro/antigravity/fitness_app/node_modules/@expo/env/build/index.js:142:48
+    at Array.forEach (<anonymous>)
+    at parseEnvFiles (/Users/shinichiro/antigravity/fitness_app/node_modules/@expo/env/build/index.js:140:27)
+    at parseProjectEnv (/Users/shinichiro/antigravity/fitness_app/node_modules/@expo/env/build/index.js:249:10)
+    at get (/Users/shinichiro/antigravity/fitness_app/node_modules/@expo/env/build/index.js:299:12)
+    at Object.load (/Users/shinichiro/antigravity/fitness_app/node_modules/@expo/env/build/index.js:316:19)
+    at loadEnvFiles (/Users/shinichiro/antigravity/fitness_app/node_modules/expo/node_modules/@expo/cli/build/src/utils/nodeEnv.js:74:19)
+    at expoStart (/Users/shinichiro/antigravity/fitness_app/node_modules/expo/node_modules/@expo/cli/build/src/start/index.js:138:5) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'open',
+  path: '/Users/shinichiro/antigravity/fitness_app/.env'
+}
+
+Node.js v24.13.0

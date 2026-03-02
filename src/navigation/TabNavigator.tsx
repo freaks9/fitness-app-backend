@@ -14,6 +14,7 @@ import MyPageScreen from '../screens/MyPageScreen';
 const Tab = createBottomTabNavigator();
 
 const TabNavigator = () => {
+    console.log('TabNavigator: Component rendering...');
     const insets = useSafeAreaInsets();
 
     return (
