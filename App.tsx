@@ -32,6 +32,8 @@ import PremiumScreen from './src/screens/PremiumScreen';
 import ScannerScreen from './src/screens/ScannerScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import SignupScreen from './src/screens/auth/SignupScreen';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -105,6 +107,8 @@ const AppNavigator = () => {
                 <AuthStack.Navigator screenOptions={{ headerShown: false }}>
                     <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
                     <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
+                    <AuthStack.Screen name="Login" component={LoginScreen} />
+                    <AuthStack.Screen name="Signup" component={SignupScreen} />
                 </AuthStack.Navigator>
             </NavigationContainer>
         );

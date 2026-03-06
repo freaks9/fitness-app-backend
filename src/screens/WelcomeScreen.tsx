@@ -31,6 +31,10 @@ const WelcomeScreen = ({ navigation }: any) => {
         navigation.navigate('Onboarding');
     };
 
+    const handleLogin = () => {
+        navigation.navigate('Login');
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -93,6 +97,15 @@ const WelcomeScreen = ({ navigation }: any) => {
                         >
                             <Text style={styles.startButtonText}>初期設定を始める</Text>
                             <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
+
+                        {/* Login link for existing users */}
+                        <TouchableOpacity
+                            style={styles.loginLink}
+                            onPress={handleLogin}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.loginLinkText}>すでにアカウントをお持ちの方はこちら</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -175,6 +188,17 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '800',
         letterSpacing: 1,
+    },
+    loginLink: {
+        marginTop: 16,
+        alignItems: 'center',
+        paddingVertical: 10,
+    },
+    loginLinkText: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 14,
+        fontWeight: '500',
+        textDecorationLine: 'underline',
     },
 });
 

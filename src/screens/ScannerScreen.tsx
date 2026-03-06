@@ -7,7 +7,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import {
     Alert,
-    Button,
     Modal,
     StyleSheet,
     Text,
@@ -48,10 +47,14 @@ const ScannerScreen = ({ navigation, route }: any) => {
     }
 
     if (!permission.granted) {
+        // Apple Guideline 5.1.1: do NOT use "grant permission" on the button.
+        // Use neutral words like "続ける" (Continue).
         return (
-            <View style={styles.container}>
-                <Text style={{ textAlign: 'center' }}>We need your permission to show the camera</Text>
-                <Button onPress={requestPermission} title="grant permission" />
+            <View style={styles.permissionContainer}>
+                <Text style={styles.permissionText}>{t('permissionRequired')}</Text>
+                <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+                    <Text style={styles.permissionButtonText}>続ける</Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -444,6 +447,31 @@ const ScannerScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    permissionContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    permissionText: {
+        textAlign: 'center',
+        fontSize: 16,
+        color: '#333',
+        marginBottom: 24,
+        lineHeight: 24,
+    },
+    permissionButton: {
+        backgroundColor: '#007AFF',
+        paddingHorizontal: 48,
+        paddingVertical: 14,
+        borderRadius: 12,
+    },
+    permissionButtonText: {
+        color: '#fff',
+        fontSize: 17,
+        fontWeight: '600',
     },
     camera: {
         flex: 1,
