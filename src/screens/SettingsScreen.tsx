@@ -158,14 +158,6 @@ const SettingsScreen = ({ navigation }: any) => {
                     </View>
                 </View>
 
-                <TouchableOpacity
-                    style={styles.premiumButton}
-                    onPress={() => navigation.navigate('Premium')}
-                >
-                    <Text style={styles.premiumButtonText}>プレミアムプランについて</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#fff" />
-                </TouchableOpacity>
-
                 <Text style={styles.label}>{t('language')}</Text>
                 <View style={styles.row}>
                     <Button

@@ -28,7 +28,6 @@ import LabelScannerScreen from './src/screens/LabelScannerScreen';
 import MealEntryScreen from './src/screens/MealEntryScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import PremiumScreen from './src/screens/PremiumScreen';
 import ScannerScreen from './src/screens/ScannerScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
@@ -126,7 +125,6 @@ const AppNavigator = () => {
                 <Stack.Screen name="LabelScanner" component={LabelScannerScreen} />
                 <Stack.Screen name="Camera" component={CameraScreen} />
                 <Stack.Screen name="Settings" component={SettingsScreen} />
-                <Stack.Screen name="Premium" component={PremiumScreen} />
                 <Stack.Screen name="Analysis" component={AnalysisScreen} />
                 <Stack.Screen name="ExerciseEntry" component={ExerciseEntryScreen} />
                 <Stack.Screen name="Notifications" component={NotificationScreen} />

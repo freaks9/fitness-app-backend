@@ -155,12 +155,6 @@ const MyPageScreen = ({ navigation }: any) => {
 
     const menuItems = [
         {
-            icon: Crown,
-            label: profile.isPremium ? '✅ プレミアム会員' : '👑 Premiumにアップグレード',
-            color: '#F59E0B',
-            onPress: () => navigation.navigate('Premium'),
-        },
-        {
             icon: Settings,
             label: '身体データ・目標設定',
             color: '#10B981',
