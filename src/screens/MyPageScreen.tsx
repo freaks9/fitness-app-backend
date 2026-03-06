@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Briefcase, Crown, Flame, Hash, Heart, Info, LogOut, MessageSquare, Microscope, Settings, Shield, Trophy, User, Zap } from 'lucide-react-native';
+import { Briefcase, Crown, Flame, Hash, Heart, Info, LogOut, MessageSquare, Microscope, Settings, Shield, Trophy, User, Zap } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
@@ -75,7 +75,7 @@ const MyPageScreen = ({ navigation }: any) => {
                     const d = new Date();
                     d.setDate(d.getDate() - i);
                     const dateStr = d.toISOString().split('T')[0];
-                    const raw = await AsyncStorage.getItem(`meals_${dateStr}`);
+                    const raw = await AsyncStorage.getItem(`meals_${dateStr} `);
                     if (raw) {
                         const meals = JSON.parse(raw);
                         const daySalt = meals.reduce((sum: number, m: any) => sum + (parseFloat(m.salt) || 0), 0);
@@ -161,18 +161,6 @@ const MyPageScreen = ({ navigation }: any) => {
             onPress: () => navigation.navigate('Premium'),
         },
         {
-            icon: Heart,
-            label: 'ヘルスケア連携 (Apple Health)',
-            color: '#EF4444',
-            onPress: () => Alert.alert('近日公開', 'Apple Health連携はv1.3で対応予定です。'),
-        },
-        {
-            icon: Bell,
-            label: '解析完了通知',
-            color: '#1E88E5',
-            onPress: () => Alert.alert('近日公開', '通知機能はv1.3で対応予定です。'),
-        },
-        {
             icon: Settings,
             label: '身体データ・目標設定',
             color: '#10B981',
@@ -243,13 +231,13 @@ const MyPageScreen = ({ navigation }: any) => {
                 <View style={styles.statsGrid}>
                     <View style={[styles.statBox, { borderLeftColor: config.accent }]}>
                         <Briefcase size={18} color={config.accent} style={styles.statIcon} />
-                        <Text style={styles.statValue}>{currentWeight ? `${currentWeight}` : '--'}</Text>
+                        <Text style={styles.statValue}>{currentWeight ? `${currentWeight} ` : '--'}</Text>
                         <Text style={styles.statUnit}>kg</Text>
                         <Text style={styles.statLabel}>体重</Text>
                     </View>
                     <View style={[styles.statBox, { borderLeftColor: '#FF9500' }]}>
                         <Zap size={18} color="#FF9500" style={styles.statIcon} />
-                        <Text style={styles.statValue}>{avgSalt !== null ? `${avgSalt}` : '--'}</Text>
+                        <Text style={styles.statValue}>{avgSalt !== null ? `${avgSalt} ` : '--'}</Text>
                         <Text style={styles.statUnit}>g</Text>
                         <Text style={styles.statLabel}>平均塩分</Text>
                     </View>
@@ -307,7 +295,7 @@ const MyPageScreen = ({ navigation }: any) => {
                                 <Text style={styles.controlBtnText}>−</Text>
                             </TouchableOpacity>
                             <View style={styles.sensitivityBarContainer}>
-                                <View style={[styles.sensitivityBar, { width: `${profile.aiCoachSettings?.warningSensitivity ?? 70}%` as any }]} />
+                                <View style={[styles.sensitivityBar, { width: `${profile.aiCoachSettings?.warningSensitivity ?? 70}% ` as any }]} />
                             </View>
                             <TouchableOpacity onPress={() => handleUpdateSensitivity(5)} style={styles.controlBtn}>
                                 <Text style={styles.controlBtnText}>+</Text>
@@ -426,7 +414,7 @@ const MyPageScreen = ({ navigation }: any) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.aboutRow}
-                                onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+                                onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL} `)}
                             >
                                 <Text style={styles.aboutLabel}>サポート</Text>
                                 <Text style={[styles.aboutValue, { color: '#1E88E5' }]}>{SUPPORT_EMAIL}</Text>
