@@ -193,40 +193,31 @@ export default async function foodRoutes(fastify: FastifyInstance) {
                 };
             });
 
-            // 3. Cache results to Local DB
-            // We only cache OFF results as they have valid barcodes. 
-            // FatSecret items have fake barcodes, so we might skip caching them or cache with custom prefix if we change schema.
-            // For now, let's ONLY cache OFF results to avoid polluting DB with fake IDs or handle them gracefully.
-            // Actually, caching FatSecret items is good for performance if we use the same ID schema.
-
+            // 3. Cache results to Local DB (best-effort, don't fail if cache fails)
             const allResultsToCache = [...formattedOffResults, ...formattedFatSecretResults];
 
-            // Using Promise.all for upserts
-            await Promise.all(allResultsToCache.map(p =>
-                prisma.foodProduct.upsert({
-                    where: { barcode: p.barcode },
-                    update: {}, // Don't overwrite if exists
-                    create: {
-                        barcode: p.barcode,
-                        name: p.name,
-                        calories: p.calories,
-                        protein: p.protein,
-                        fat: p.fat,
-                        carbs: p.carbs,
-                        source: p.source
-                    }
-                }).catch(err => {
-                    // Ignore unique constraint errors
-                })
-            ));
+            try {
+                await Promise.allSettled(allResultsToCache.map(p =>
+                    prisma.foodProduct.upsert({
+                        where: { barcode: p.barcode },
+                        update: {},
+                        create: {
+                            barcode: p.barcode,
+                            name: p.name,
+                            calories: p.calories,
+                            protein: p.protein,
+                            fat: p.fat,
+                            carbs: p.carbs,
+                            source: p.source
+                        }
+                    })
+                ));
+            } catch (cacheErr) {
+                console.warn('Cache write failed (non-fatal):', cacheErr);
+            }
 
             // 4. Return Combined / Fresh results
-            // Merge: Local + OFF + FatSecret
-            // Filter out duplicates.
-
             const allFetchedResults = [...formattedOffResults, ...formattedFatSecretResults];
-
-            // Filter out items already in localResults (by barcode)
             const localBarcodes = new Set(localResults.map(p => p.barcode));
             const newResults = allFetchedResults.filter((p: any) => !localBarcodes.has(p.barcode));
 

@@ -2,7 +2,7 @@ import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLanguageContext } from '../context/LanguageContext';
-import { analyzeImage } from '../services/aiService';
+import { analyzeMeal } from '../services/foodApiService';
 
 export default function CameraScreen({ navigation }: any) {
     const { t } = useLanguageContext();
@@ -52,15 +52,21 @@ export default function CameraScreen({ navigation }: any) {
     const analyze = async (base64: string) => {
         setAnalyzing(true);
         try {
-            const result = await analyzeImage(base64);
+            const result = await analyzeMeal(base64);
             if (result) {
+                const name = result.food_name || '不明な食品';
+                const calories = Number(result.calories) || 0;
+                const protein = Number(result.protein) || 0;
+                const fat = Number(result.fat) || 0;
+                const carbs = Number(result.carbs) || 0;
+
                 Alert.alert(
-                    "Analysis Complete",
-                    `Detected: ${result.name}\n${t('calories')}: ${result.calories}`,
+                    'AI解析完了',
+                    `${name}\nカロリー: ${calories} kcal\nP: ${protein}g / F: ${fat}g / C: ${carbs}g`,
                     [
                         {
-                            text: "Cancel",
-                            style: "cancel",
+                            text: 'キャンセル',
+                            style: 'cancel',
                             onPress: () => {
                                 setPhoto(null);
                                 setAnalyzing(false);
@@ -69,22 +75,24 @@ export default function CameraScreen({ navigation }: any) {
                         {
                             text: t('addMeal'),
                             onPress: () => {
-                                // Pass data back to MealEntry
                                 navigation.navigate('MealEntry', {
-                                    prefilledName: result.name,
-                                    prefilledCalories: result.calories.toString(),
-                                    imageUri: photo // Pass the photo URI
+                                    prefilledName: name,
+                                    prefilledCalories: calories.toString(),
+                                    prefilledProtein: protein.toString(),
+                                    prefilledFat: fat.toString(),
+                                    prefilledCarbs: carbs.toString(),
+                                    imageUri: photo
                                 });
                             }
                         }
                     ]
                 );
             } else {
-                Alert.alert(t('error'), "Could not identify food.");
+                Alert.alert(t('error'), '食品を識別できませんでした。');
                 setPhoto(null);
             }
         } catch {
-            Alert.alert(t('error'), "AI Analysis failed.");
+            Alert.alert(t('error'), 'AI解析に失敗しました。ネットワーク状況を確認してください。');
             setPhoto(null);
         } finally {
             setAnalyzing(false);
