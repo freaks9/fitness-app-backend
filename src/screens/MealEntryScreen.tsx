@@ -261,161 +261,164 @@ const MealEntryScreen = ({ navigation, route }: any) => {
     };
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={styles.scrollContainer}>
-                <View style={styles.container}>
-                    <View style={styles.headerRow}>
-                        <Text style={styles.title}>{t('addMealTitle')}</Text>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topCloseButton}>
-                            <X color="#64748B" size={24} />
-                        </TouchableOpacity>
-                    </View>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.scrollContainer}>
 
-                    <Text style={styles.label}>{t('mealType')}</Text>
-                    <View style={styles.mealTypeContainer}>
-                        {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
-                            <TouchableOpacity
-                                key={type}
-                                style={[styles.mealTypeButton, mealType === type && styles.mealTypeButtonSelected]}
-                                onPress={() => setMealType(type)}
-                            >
-                                <Text style={[styles.mealTypeText, mealType === type && styles.mealTypeTextSelected]}>{t(type)}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {imageUri && (
-                        <View style={styles.imagePreviewContainer}>
-                            <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-                        </View>
-                    )}
-
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>{t('mealName')}</Text>
-                        <TextInput style={styles.input} value={mealName} onChangeText={setMealName} placeholder={t('mealNamePlaceholder') || "例: 鶏肉のサラダ"} />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>{t('quantity')}</Text>
-                        <TextInput style={styles.input} keyboardType="numeric" value={quantity} onChangeText={updateQuantity} />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>{t('calories') || 'エネルギー'} (kcal)</Text>
-                        <TextInput style={styles.input} keyboardType="numeric" value={calories} onChangeText={setCalories} />
-                    </View>
-
-                    <Text style={styles.label}>PFCバランス (g)</Text>
-                    <View style={styles.pfcRow}>
-                        <View style={styles.pfcInputWrapper}>
-                            <Text style={styles.pfcInputLabel}>P</Text>
-                            <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={protein} onChangeText={setProtein} />
-                        </View>
-                        <View style={styles.pfcInputWrapper}>
-                            <Text style={styles.pfcInputLabel}>F</Text>
-                            <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={fat} onChangeText={setFat} />
-                        </View>
-                        <View style={styles.pfcInputWrapper}>
-                            <Text style={styles.pfcInputLabel}>C</Text>
-                            <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={carbs} onChangeText={setCarbs} />
-                        </View>
-                    </View>
-
-                    <TouchableOpacity style={styles.searchBtn} onPress={() => setModalVisible(true)}>
-                        <Text style={styles.searchBtnText}>🔍 {t('searchDatabase') || 'データベースを検索'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.addButton} onPress={addMealData} disabled={loading}>
-                        <Text style={styles.addButtonText}>{loading ? (t('saving') || '保存中...') : (t('add') || '登録する')}</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-                    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>{t('selectFood') || '食品を選択'}</Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeIconButton}>
+                    <View style={styles.container}>
+                        <View style={styles.headerRow}>
+                            <Text style={styles.title}>{t('addMealTitle')}</Text>
+                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topCloseButton}>
                                 <X color="#64748B" size={24} />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.modalContent}>
-                            <View style={styles.searchContainerRow}>
-                                <View style={styles.searchBarContainer}>
-                                    <Search color="#94A3B8" size={20} style={styles.searchIcon} />
-                                    <TextInput
-                                        style={styles.modalSearchInput}
-                                        placeholder={t('searchPlaceholder') || "食品名を入力..."}
-                                        value={searchQuery}
-                                        onChangeText={handleSearch}
-                                        placeholderTextColor="#94A3B8"
-                                    />
-                                    {searchQuery.length > 0 && (
-                                        <TouchableOpacity onPress={() => handleSearch('')}>
-                                            <X color="#94A3B8" size={18} />
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelButton}>
-                                    <Text style={styles.cancelButtonText}>{t('cancel') || 'キャンセル'}</Text>
+                        <Text style={styles.label}>{t('mealType')}</Text>
+                        <View style={styles.mealTypeContainer}>
+                            {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.mealTypeButton, mealType === type && styles.mealTypeButtonSelected]}
+                                    onPress={() => setMealType(type)}
+                                >
+                                    <Text style={[styles.mealTypeText, mealType === type && styles.mealTypeTextSelected]}>{t(type)}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {imageUri && (
+                            <View style={styles.imagePreviewContainer}>
+                                <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+                            </View>
+                        )}
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('mealName')}</Text>
+                            <TextInput style={styles.input} value={mealName} onChangeText={setMealName} placeholder={t('mealNamePlaceholder') || "例: 鶏肉のサラダ"} />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('quantity')}</Text>
+                            <TextInput style={styles.input} keyboardType="numeric" value={quantity} onChangeText={updateQuantity} />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('calories') || 'エネルギー'} (kcal)</Text>
+                            <TextInput style={styles.input} keyboardType="numeric" value={calories} onChangeText={setCalories} />
+                        </View>
+
+                        <Text style={styles.label}>PFCバランス (g)</Text>
+                        <View style={styles.pfcRow}>
+                            <View style={styles.pfcInputWrapper}>
+                                <Text style={styles.pfcInputLabel}>P</Text>
+                                <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={protein} onChangeText={setProtein} />
+                            </View>
+                            <View style={styles.pfcInputWrapper}>
+                                <Text style={styles.pfcInputLabel}>F</Text>
+                                <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={fat} onChangeText={setFat} />
+                            </View>
+                            <View style={styles.pfcInputWrapper}>
+                                <Text style={styles.pfcInputLabel}>C</Text>
+                                <TextInput style={[styles.input, styles.pfcInput]} placeholder="0.0" keyboardType="numeric" value={carbs} onChangeText={setCarbs} />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity style={styles.searchBtn} onPress={() => setModalVisible(true)}>
+                            <Text style={styles.searchBtnText}>🔍 {t('searchDatabase') || 'データベースを検索'}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.addButton} onPress={addMealData} disabled={loading}>
+                            <Text style={styles.addButtonText}>{loading ? (t('saving') || '保存中...') : (t('add') || '登録する')}</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+                        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>{t('selectFood') || '食品を選択'}</Text>
+                                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeIconButton}>
+                                    <X color="#64748B" size={24} />
                                 </TouchableOpacity>
                             </View>
 
-                            {isSearchingApi ? (
-                                <View style={styles.searchingContainer}>
-                                    <ActivityIndicator size="large" color="#1E88E5" />
-                                    <Text style={styles.searchingText}>{t('searching') || 'データベースを検索中...'}</Text>
+                            <View style={styles.modalContent}>
+                                <View style={styles.searchContainerRow}>
+                                    <View style={styles.searchBarContainer}>
+                                        <Search color="#94A3B8" size={20} style={styles.searchIcon} />
+                                        <TextInput
+                                            style={styles.modalSearchInput}
+                                            placeholder={t('searchPlaceholder') || "食品名を入力..."}
+                                            value={searchQuery}
+                                            onChangeText={handleSearch}
+                                            placeholderTextColor="#94A3B8"
+                                        />
+                                        {searchQuery.length > 0 && (
+                                            <TouchableOpacity onPress={() => handleSearch('')}>
+                                                <X color="#94A3B8" size={18} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelButton}>
+                                        <Text style={styles.cancelButtonText}>{t('cancel') || 'キャンセル'}</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            ) : (
-                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                                    {searchQuery.length === 0 ? (
-                                        <>
-                                            {history.length > 0 && (
-                                                <View style={styles.historySection}>
-                                                    <View style={styles.sectionTitleRow}>
-                                                        <Text style={styles.sectionLabel}>{t('recentSearches') || '最近の検索'}</Text>
-                                                        <TouchableOpacity onPress={clearLocalHistory}>
-                                                            <Text style={styles.clearText}>{t('clearHistory') || '消去'}</Text>
-                                                        </TouchableOpacity>
+
+                                {isSearchingApi ? (
+                                    <View style={styles.searchingContainer}>
+                                        <ActivityIndicator size="large" color="#1E88E5" />
+                                        <Text style={styles.searchingText}>{t('searching') || 'データベースを検索中...'}</Text>
+                                    </View>
+                                ) : (
+                                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                                        {searchQuery.length === 0 ? (
+                                            <>
+                                                {history.length > 0 && (
+                                                    <View style={styles.historySection}>
+                                                        <View style={styles.sectionTitleRow}>
+                                                            <Text style={styles.sectionLabel}>{t('recentSearches') || '最近の検索'}</Text>
+                                                            <TouchableOpacity onPress={clearLocalHistory}>
+                                                                <Text style={styles.clearText}>{t('clearHistory') || '消去'}</Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                        {history.map((item, i) => (
+                                                            <TouchableOpacity key={i} style={styles.historySearchItem} onPress={() => selectFood(item)}>
+                                                                <History color="#94A3B8" size={18} style={{ marginRight: 12 }} />
+                                                                <Text style={styles.historySearchName}>{item.name}</Text>
+                                                                <ChevronRight color="#CBD5E1" size={16} />
+                                                            </TouchableOpacity>
+                                                        ))}
                                                     </View>
-                                                    {history.map((item, i) => (
-                                                        <TouchableOpacity key={i} style={styles.historySearchItem} onPress={() => selectFood(item)}>
-                                                            <History color="#94A3B8" size={18} style={{ marginRight: 12 }} />
-                                                            <Text style={styles.historySearchName}>{item.name}</Text>
-                                                            <ChevronRight color="#CBD5E1" size={16} />
-                                                        </TouchableOpacity>
-                                                    ))}
-                                                </View>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <View style={styles.resultsSection}>
-                                            {apiResults.map((item, i) => (
-                                                <TouchableOpacity key={i} style={styles.resultItem} onPress={() => selectFood(item)}>
-                                                    <View style={styles.resultIconWrapper}>
-                                                        <Search color="#1E88E5" size={18} />
+                                                )}
+                                            </>
+                                        ) : (
+                                            <View style={styles.resultsSection}>
+                                                {apiResults.map((item, i) => (
+                                                    <TouchableOpacity key={i} style={styles.resultItem} onPress={() => selectFood(item)}>
+                                                        <View style={styles.resultIconWrapper}>
+                                                            <Search color="#1E88E5" size={18} />
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={styles.foodName}>{item.name}</Text>
+                                                            <Text style={styles.foodCal}>{item.calories} kcal</Text>
+                                                        </View>
+                                                        <ChevronRight color="#CBD5E1" size={18} />
+                                                    </TouchableOpacity>
+                                                ))}
+                                                {apiResults.length === 0 && !isSearchingApi && (
+                                                    <View style={styles.emptyResults}>
+                                                        <Text style={styles.noResultsText}>{t('noResults') || '見つかりませんでした'}</Text>
                                                     </View>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={styles.foodName}>{item.name}</Text>
-                                                        <Text style={styles.foodCal}>{item.calories} kcal</Text>
-                                                    </View>
-                                                    <ChevronRight color="#CBD5E1" size={18} />
-                                                </TouchableOpacity>
-                                            ))}
-                                            {apiResults.length === 0 && !isSearchingApi && (
-                                                <View style={styles.emptyResults}>
-                                                    <Text style={styles.noResultsText}>{t('noResults') || '見つかりませんでした'}</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                    )}
-                                </ScrollView>
-                            )}
-                        </View>
-                    </SafeAreaView>
-                </Modal>
-            </ScrollView>
-        </KeyboardAvoidingView >
+                                                )}
+                                            </View>
+                                        )}
+                                    </ScrollView>
+                                )}
+                            </View>
+                        </SafeAreaView>
+                    </Modal>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
