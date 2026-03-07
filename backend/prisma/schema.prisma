@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model FoodProduct {
@@ -35,4 +34,95 @@ model AiAnalysisCache {
   imageHash  String   @id
   resultJson String
   createdAt  DateTime @default(now())
+
+  @@map("ai_analysis_cache")
+}
+
+model Profile {
+  id            String      @id @db.Uuid
+  nickname      String?
+  goalCalories  Int?        @map("goal_calories")
+  targetSodium  Float?      @default(2.5) @map("target_sodium")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  labReports    LabReport[]
+  labLikes      LabLike[]
+  labComments   LabComment[]
+  notifications Notification[] @relation("UserNotifications")
+  sentNotifications Notification[] @relation("SenderNotifications")
+  savedMenus    SavedMenu[]
+
+  @@map("profiles")
+}
+
+model LabReport {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  dishName       String       @map("dish_name")
+  imageUrl       String?      @map("image_url")
+  nutrients      Json
+  comment        String?
+  replicateCount Int?         @default(0) @map("replicate_count")
+  methodTag      String?      @map("method_tag")
+  isRecommended  Boolean?     @default(false) @map("is_recommended")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  profile        Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labLikes       LabLike[]
+  labComments    LabComment[]
+  savedMenus     SavedMenu[]
+
+  @@map("lab_reports")
+}
+
+model LabLike {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  reportId  String    @map("report_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  profile   Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report    LabReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reportId])
+  @@map("lab_likes")
+}
+
+model LabComment {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  reportId  String       @map("report_id") @db.Uuid
+  content   String
+  parentId  String?      @map("parent_id") @db.Uuid
+  createdAt DateTime     @default(now()) @map("created_at")
+  profile   Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report    LabReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  parent    LabComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   LabComment[] @relation("CommentReplies")
+
+  @@map("lab_comments")
+}
+
+model Notification {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  senderId    String?  @map("sender_id") @db.Uuid
+  type        String
+  referenceId String   @map("reference_id") @db.Uuid
+  message     String?
+  isRead      Boolean? @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        Profile  @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  sender      Profile? @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
+
+model SavedMenu {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  reportId  String    @map("report_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  profile   Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report    LabReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reportId])
+  @@map("saved_menus")
 }
