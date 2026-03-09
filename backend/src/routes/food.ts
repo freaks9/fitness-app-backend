@@ -106,20 +106,28 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
             console.log('Fuzzy Search Terms:', searchTerms);
 
-            const localResults = await prisma.foodProduct.findMany({
-                where: {
-                    OR: searchTerms.map(term => ({
-                        name: {
-                            contains: term
-                        }
-                    }))
-                },
-                take: 50,
-                orderBy: { createdAt: 'desc' }
-            });
-            console.log(`[DEBUG] Local Search: Found ${localResults.length} items for terms: ${JSON.stringify(searchTerms)}`);
-            if (localResults.length > 0) {
-                console.log(`[DEBUG] Local Items: ${localResults.map((p: any) => p.name).join(', ')}`);
+            let localResults: any[] = [];
+            try {
+                localResults = await prisma.foodProduct.findMany({
+                    where: {
+                        OR: searchTerms.map(term => ({
+                            name: {
+                                contains: term
+                            }
+                        }))
+                    },
+                    take: 50,
+                    orderBy: { createdAt: 'desc' }
+                });
+                console.log(`[DEBUG] Local Search: Found ${localResults.length} items for terms: ${JSON.stringify(searchTerms)}`);
+            } catch (dbErr: any) {
+                console.error('[DATABASE ERROR] Local search failed:', dbErr.message);
+                try {
+                    const tables = await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`;
+                    console.log('[DIAGNOSTIC] Existing tables in public schema:', JSON.stringify(tables));
+                } catch (diagErr: any) {
+                    console.error('[DIAGNOSTIC ERROR] Failed to list tables:', diagErr.message);
+                }
             }
 
             // If we have enough local results, return them (Cache Hit optimization)
