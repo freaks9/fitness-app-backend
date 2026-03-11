@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// --- PRODUCTION BACKEND URL ---
-// Replace with your actual production backend URL (e.g., https://your-backend.onrender.com/api)
-const PRODUCTION_URL = 'https://fitness-app-ai-backend.onrender.com/api';
+// 本番バックエンドURL（eas.json の EXPO_PUBLIC_API_URL 変数から取得）
+const PRODUCTION_URL = process.env.EXPO_PUBLIC_API_URL
+    ? `${process.env.EXPO_PUBLIC_API_URL}/api`
+    : 'https://fitness-backend.onrender.com/api';
 
 const getBaseUrl = () => {
-    // In development mode, always use the local server
+    // 開発モードではローカルサーバーを使用する
     if (__DEV__) {
         if (Platform.OS === 'android') {
             return 'http://10.0.2.2:3000/api/';
@@ -14,15 +15,12 @@ const getBaseUrl = () => {
         return 'http://localhost:3000/api/';
     }
 
-    // Production logic
-    // If the URL is still a placeholder or known non-functional URL, fallback to a safe state or alert the developer
-    let url = PRODUCTION_URL;
-    if (!url || url.includes('onrender.com') && url.includes('fitness-app-ai-backend')) {
-        // WARNING: This URL is currently 404. Ensure it is updated before final submission.
-        console.warn('Production Backend URL is not configured. Please update in foodApiService.ts');
+    // 本番モード
+    if (!process.env.EXPO_PUBLIC_API_URL) {
+        console.warn('[foodApiService] EXPO_PUBLIC_API_URL が未設定です。eas.json を確認してください。');
     }
 
-    return url.endsWith('/') ? url : `${url}/`;
+    return PRODUCTION_URL.endsWith('/') ? PRODUCTION_URL : `${PRODUCTION_URL}/`;
 };
 
 const API_URL = getBaseUrl();

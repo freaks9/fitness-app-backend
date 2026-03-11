@@ -5,6 +5,7 @@ import { prisma } from './db';
 import aiRoutes from './routes/ai';
 import foodRoutes from './routes/food';
 import logRoutes from './routes/logs';
+import socialRoutes from './routes/social';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ fastify.register(cors, {
 fastify.register(foodRoutes, { prefix: '/api/food' });
 fastify.register(logRoutes, { prefix: '/api/logs' });
 fastify.register(aiRoutes, { prefix: '/api/ai' });
+fastify.register(socialRoutes, { prefix: '/api/social' });
 
 fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);

@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["public", "auth"]
 }
 
 model FoodProduct {
@@ -19,6 +21,8 @@ model FoodProduct {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   mealLogs  MealLog[]
+
+  @@schema("public")
 }
 
 model MealLog {
@@ -29,6 +33,8 @@ model MealLog {
   mealType    String
   date        DateTime    @default(now())
   foodProduct FoodProduct @relation(fields: [foodId], references: [barcode])
+
+  @@schema("public")
 }
 
 model AiAnalysisCache {
@@ -37,6 +43,7 @@ model AiAnalysisCache {
   createdAt  DateTime @default(now())
 
   @@map("ai_analysis_cache")
+  @@schema("public")
 }
 
 model Profile {
@@ -53,6 +60,7 @@ model Profile {
   savedMenus    SavedMenu[]
 
   @@map("profiles")
+  @@schema("public")
 }
 
 model LabReport {
@@ -72,6 +80,7 @@ model LabReport {
   savedMenus     SavedMenu[]
 
   @@map("lab_reports")
+  @@schema("public")
 }
 
 model LabLike {
@@ -84,6 +93,7 @@ model LabLike {
 
   @@unique([userId, reportId])
   @@map("lab_likes")
+  @@schema("public")
 }
 
 model LabComment {
@@ -99,6 +109,7 @@ model LabComment {
   replies   LabComment[] @relation("CommentReplies")
 
   @@map("lab_comments")
+  @@schema("public")
 }
 
 model Notification {
@@ -114,6 +125,7 @@ model Notification {
   sender      Profile? @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@map("notifications")
+  @@schema("public")
 }
 
 model SavedMenu {
@@ -126,4 +138,5 @@ model SavedMenu {
 
   @@unique([userId, reportId])
   @@map("saved_menus")
+  @@schema("public")
 }

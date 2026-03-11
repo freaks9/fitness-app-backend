@@ -20,7 +20,7 @@ import { IAPService } from '../services/IAPService';
 const PremiumScreen = () => {
     const navigation = useNavigation();
     const { t } = useLanguageContext();
-    const { profile, updateProfile } = useUser();
+    const { updateProfile } = useUser();
     const [loading, setLoading] = useState(false);
     const [subscriptions, setSubscriptions] = useState<IAP.Product[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -66,7 +66,7 @@ const PremiumScreen = () => {
             } else {
                 Alert.alert('お知らせ', '復元できる購入内容が見つかりませんでした。');
             }
-        } catch (err) {
+        } catch (_err) {
             Alert.alert(t('error'), '復元に失敗しました。');
         } finally {
             setLoading(false);

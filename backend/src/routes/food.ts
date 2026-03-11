@@ -51,7 +51,8 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
     // Search Endpoint with Caching
     fastify.get('/search', async (request, reply) => {
-        const { query } = request.query as { query: string };
+        const { query: queryParam, q } = request.query as { query?: string, q?: string };
+        const query = queryParam || q;
 
         if (!query || query.length < 1) {
             return [];
@@ -166,14 +167,14 @@ export default async function foodRoutes(fastify: FastifyInstance) {
 
             // Format OFF Results
             const formattedOffResults: FormattedProduct[] = offResults.map((p: any) => ({
-                barcode: p.barcode,
+                barcode: p.code || p.barcode, // OFF uses 'code' for barcode
                 name: p.product_name || "Unknown Product",
                 calories: p.nutriments?.['energy-kcal_100g'] || 0,
                 protein: p.nutriments?.proteins_100g || 0,
                 fat: p.nutriments?.fat_100g || 0,
                 carbs: p.nutriments?.carbohydrates_100g || 0,
                 source: 'openfoodfacts_search'
-            }));
+            })).filter(p => p.barcode); // Ensure we have a barcode
 
             // Format FatSecret Results
             // FatSecret "food_description" example: "Per 100g - Calories: 52kcal | Fat: 0.10g | Carbs: 13.00g | Protein: 0.30g"
@@ -205,7 +206,10 @@ export default async function foodRoutes(fastify: FastifyInstance) {
             const allResultsToCache = [...formattedOffResults, ...formattedFatSecretResults];
 
             try {
-                await Promise.allSettled(allResultsToCache.map(p =>
+                // Filter out any results that might have missing required fields
+                const validResultsToCache = allResultsToCache.filter(p => p.barcode && p.name);
+
+                await Promise.allSettled(validResultsToCache.map(p =>
                     prisma.foodProduct.upsert({
                         where: { barcode: p.barcode },
                         update: {},

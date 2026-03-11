@@ -277,7 +277,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
             console.error('Failed to load meals:', error);
         }
-    }, [supabase]);
+    }, []);
 
     const loadMealHistory = useCallback(async () => {
         try {
@@ -337,7 +337,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Failed to add meal:', error);
             throw error;
         }
-    }, [mealHistory, supabase]);
+    }, [mealHistory]);
 
     const deleteMeal = useCallback(async (mealId: string | number, date?: string) => {
         const dateStr = date || new Date().toISOString().split('T')[0];
@@ -358,7 +358,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
             console.error('Failed to delete meal:', error);
         }
-    }, [supabase]);
+    }, []);
 
     const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
         const newProfile = { ...profile, ...updates };
@@ -384,7 +384,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
             console.error('Failed to update profile:', error);
         }
-    }, [profile, supabase]);
+    }, [profile]);
 
     const loadSavedMenus = useCallback(async () => {
         try {
@@ -393,7 +393,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { data } = await supabase.from('saved_menus').select('*, lab_reports (*)').eq('user_id', session.user.id);
             if (data) setSavedMenus(data as SavedMenu[]);
         } catch (error) { console.error(error); }
-    }, [supabase]);
+    }, []);
 
     const saveMenu = useCallback(async (reportId: string) => {
         try {
@@ -402,7 +402,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { data } = await supabase.from('saved_menus').insert([{ user_id: session.user.id, report_id: reportId }]).select('*, lab_reports (*)').single();
             if (data) setSavedMenus(prev => [data as SavedMenu, ...prev]);
         } catch (error) { console.error(error); }
-    }, [supabase]);
+    }, []);
 
     const unsaveMenu = useCallback(async (reportId: string) => {
         try {
@@ -411,7 +411,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await supabase.from('saved_menus').delete().eq('user_id', session.user.id).eq('report_id', reportId);
             setSavedMenus(prev => prev.filter(m => m.report_id !== reportId));
         } catch (error) { console.error(error); }
-    }, [supabase]);
+    }, []);
 
     const loadLabStats = useCallback(async () => {
         try {
@@ -425,7 +425,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setLabStats({ usefulCount: likes, replicateCount: replicates, totalPoints: points, rank: points >= 100 ? 'PLATINUM' : points >= 30 ? 'GOLD' : points >= 10 ? 'SILVER' : 'STANDARD' });
             }
         } catch (error) { console.error(error); }
-    }, [supabase]);
+    }, []);
 
     useEffect(() => {
         loadProfile();

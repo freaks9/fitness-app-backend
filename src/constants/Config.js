@@ -7,11 +7,11 @@ export const CONFIG = {
     FREE_PLAN_DAILY_LIMIT: 3,
     REWARDED_AD_DAILY_LIMIT: 3,
     TRIAL_DAYS: 3,
-    // 開発・テスト用の広告ID（Google公式テストID）
+    // 広告ユニットIDの設定
     AD_UNIT_IDS: {
-        INTERSTITIAL: 'ca-app-pub-3940256099942544/4411468910',
-        BANNER: 'ca-app-pub-3940256099942544/6300978111',
-        REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+        INTERSTITIAL: 'ca-app-pub-2696240970582374/7149375315',
+        BANNER: 'ca-app-pub-2696240970582374/2623477379',
+        REWARDED: 'ca-app-pub-2696240970582374/5226037091',
     },
 
     // 課金アイテムの設定（App Store ConnectのProduct IDと一致させること）
